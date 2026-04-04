@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
 import { Activity, BarChart3, BriefcaseBusiness, Clock, Home, LogOut, MessageSquareQuote, Settings2, Star } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';

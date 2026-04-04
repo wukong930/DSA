@@ -339,6 +339,38 @@
   --color-danger-alert-border: 349 100% 63%;
   --color-danger-alert-bg: 349 100% 63%;
   --autocomplete-hover-bg: #2dcae6;
+
+  /* Stock market colors (A-share convention: red=up, green=down) */
+  --stock-up: 0 85% 58%;
+  --stock-down: 152 69% 42%;
+  --stock-flat: 228 13% 66%;
+  --stock-up-bg: hsl(0 85% 58% / 0.12);
+  --stock-down-bg: hsl(152 69% 42% / 0.12);
+  --stock-up-text: hsl(0 85% 65%);
+  --stock-down-text: hsl(152 69% 52%);
+
+  /* Status tokens */
+  --status-active: 152 69% 42%;
+  --status-inactive: 228 13% 50%;
+  --status-triggered: 37 92% 55%;
+  --status-active-bg: hsl(152 69% 42% / 0.12);
+  --status-inactive-bg: hsl(228 13% 50% / 0.1);
+  --status-triggered-bg: hsl(37 92% 55% / 0.12);
+
+  /* Spacing scale */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-lg: 1rem;
+  --space-xl: 1.5rem;
+  --space-2xl: 2rem;
+
+  /* Radius scale */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
   /* Tailwind-compatible accent colors (Dark theme) */
   --color-cyan-400: 188 78% 41%;
   --color-emerald-400: 152 69% 40%;

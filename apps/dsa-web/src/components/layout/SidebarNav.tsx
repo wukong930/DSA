@@ -60,12 +60,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
             aria-label={label}
             className={({ isActive }) =>
               cn(
-                'group relative flex items-center gap-3 border-y border-x-0 text-sm transition-all',
+                'group relative flex items-center gap-3 rounded-xl text-sm transition-all',
                 'h-[var(--nav-item-height)]',
                 collapsed ? 'justify-center px-0' : 'px-[var(--nav-item-padding-x)]',
                 isActive
-                  ? 'border-[var(--nav-active-border)] bg-[var(--nav-active-bg)] text-[hsl(var(--primary))] font-medium'
-                  : 'border-transparent text-secondary-text hover:bg-[var(--nav-hover-bg)] hover:text-foreground'
+                  ? 'bg-[var(--nav-active-bg)] text-[hsl(var(--primary))] font-medium'
+                  : 'text-secondary-text hover:bg-[var(--nav-hover-bg)] hover:text-foreground'
               )
             }
           >

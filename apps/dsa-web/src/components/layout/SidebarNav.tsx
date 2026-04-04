@@ -71,16 +71,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
           >
             {({ isActive }) => (
               <>
-                {isActive && (
-                  <motion.div 
-                    layoutId="activeIndicator"
-                    className="absolute top-0 bottom-0 left-0 w-[var(--nav-indicator-width)] bg-[var(--nav-indicator-bg)] shadow-[0_0_10px_var(--nav-indicator-shadow)]"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                  />
-                )}
-                <Icon className={cn('ml-1 h-5 w-5 shrink-0', isActive ? 'text-[var(--nav-icon-active)]' : 'text-current')} />
+                <Icon className={cn('ml-1 h-5 w-5 shrink-0', isActive ? 'text-[hsl(var(--primary))]' : 'text-current')} />
                 {!collapsed ? <span className="truncate">{label}</span> : null}
                 {badge === 'completion' && completionBadge ? (
                   <StatusDot

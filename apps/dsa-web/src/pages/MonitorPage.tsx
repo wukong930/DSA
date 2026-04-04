@@ -243,11 +243,11 @@ const MonitorPage: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {tasks.map((task) => (
-                <Card key={task.id} className="group transition-all hover:border-cyan/20" padding="none">
+                <Card key={task.id} className="group overflow-hidden transition-all hover:border-cyan/20" padding="none">
                   <div className="flex items-start gap-4 p-5">
                     {/* Left: status + info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2.5 mb-1">
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                         <StatusDot tone={task.isActive ? 'success' : 'neutral'} pulse={task.isActive} aria-label={task.isActive ? '运行中' : '已暂停'} />
                         <span className="text-base font-semibold text-foreground">{task.stockName || task.stockCode}</span>
                         <span className="text-sm text-muted-text">{task.stockCode}</span>
@@ -289,14 +289,14 @@ const MonitorPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleToggle(task.id, task.isActive)}
-                        className={`relative h-7 w-12 rounded-full transition-colors ${
+                        className={`relative h-5 w-9 rounded-full transition-colors ${
                           task.isActive ? 'bg-success' : 'bg-muted'
                         }`}
                         aria-label={task.isActive ? '暂停' : '启用'}
                       >
                         <span
-                          className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform ${
-                            task.isActive ? 'translate-x-5' : 'translate-x-0.5'
+                          className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                            task.isActive ? 'translate-x-4' : 'translate-x-0'
                           }`}
                         />
                       </button>

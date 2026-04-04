@@ -3,6 +3,7 @@ import { watchlistApi } from '../api/watchlist';
 import type { WatchlistItem, FilterResult } from '../api/watchlist';
 import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
+import { USE_MOCK, MOCK_WATCHLIST_ITEMS, MOCK_FILTER_RESULTS } from '../mock/data';
 
 interface WatchlistState {
   items: WatchlistItem[];
@@ -27,6 +28,10 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
   error: null,
 
   fetchItems: async () => {
+    if (USE_MOCK) {
+      set({ items: [...MOCK_WATCHLIST_ITEMS], loading: false });
+      return;
+    }
     set({ loading: true, error: null });
     try {
       const res = await watchlistApi.list();
@@ -37,6 +42,20 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
   },
 
   addItem: async (data) => {
+    if (USE_MOCK) {
+      const newItem: WatchlistItem = {
+        id: Math.max(0, ...get().items.map((i) => i.id)) + 1,
+        userId: 0,
+        stockCode: data.stockCode,
+        stockName: data.stockName || null,
+        market: data.market || 'cn',
+        tags: data.tags || [],
+        notes: data.notes || null,
+        addedAt: new Date().toISOString(),
+      };
+      set({ items: [...get().items, newItem] });
+      return true;
+    }
     try {
       await watchlistApi.add(data);
       await get().fetchItems();
@@ -48,6 +67,10 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
   },
 
   removeItem: async (itemId) => {
+    if (USE_MOCK) {
+      set({ items: get().items.filter((i) => i.id !== itemId) });
+      return true;
+    }
     try {
       await watchlistApi.remove(itemId);
       await get().fetchItems();
@@ -59,6 +82,14 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
   },
 
   updateItem: async (itemId, data) => {
+    if (USE_MOCK) {
+      set({
+        items: get().items.map((i) =>
+          i.id === itemId ? { ...i, tags: data.tags ?? i.tags, notes: data.notes ?? i.notes } : i,
+        ),
+      });
+      return true;
+    }
     try {
       await watchlistApi.update(itemId, data);
       await get().fetchItems();
@@ -70,6 +101,12 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
   },
 
   filterWatchlist: async (conditions) => {
+    if (USE_MOCK) {
+      set({ filtering: true });
+      await new Promise((r) => setTimeout(r, 500));
+      set({ filterResults: [...MOCK_FILTER_RESULTS], filtering: false });
+      return;
+    }
     set({ filtering: true, error: null });
     try {
       const res = await watchlistApi.filter(conditions);

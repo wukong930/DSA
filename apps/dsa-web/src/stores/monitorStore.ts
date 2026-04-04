@@ -3,6 +3,7 @@ import { monitorApi } from '../api/monitor';
 import type { MonitorTask, MonitorAlert } from '../api/monitor';
 import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
+import { USE_MOCK, MOCK_MONITOR_TASKS, MOCK_MONITOR_ALERTS, MOCK_INDICATORS } from '../mock/data';
 
 interface MonitorState {
   tasks: MonitorTask[];
@@ -28,6 +29,10 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   error: null,
 
   fetchTasks: async () => {
+    if (USE_MOCK) {
+      set({ tasks: [...MOCK_MONITOR_TASKS], loading: false });
+      return;
+    }
     set({ loading: true, error: null });
     try {
       const res = await monitorApi.list();
@@ -38,6 +43,10 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   fetchAlerts: async () => {
+    if (USE_MOCK) {
+      set({ alerts: [...MOCK_MONITOR_ALERTS] });
+      return;
+    }
     try {
       const res = await monitorApi.getAlerts();
       set({ alerts: res.alerts });
@@ -47,6 +56,10 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   fetchIndicators: async () => {
+    if (USE_MOCK) {
+      set({ indicators: [...MOCK_INDICATORS] });
+      return;
+    }
     try {
       const res = await monitorApi.getIndicators();
       set({ indicators: res.indicators });
@@ -56,6 +69,22 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   createTask: async (data) => {
+    if (USE_MOCK) {
+      const newTask: MonitorTask = {
+        id: Math.max(0, ...get().tasks.map((t) => t.id)) + 1,
+        stockCode: data.stockCode,
+        stockName: data.stockName || null,
+        market: data.market || 'cn',
+        conditions: data.conditions as MonitorTask['conditions'],
+        isActive: true,
+        intervalMinutes: data.intervalMinutes || 15,
+        lastCheckedAt: null,
+        lastTriggeredAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      set({ tasks: [...get().tasks, newTask] });
+      return true;
+    }
     try {
       await monitorApi.create(data);
       await get().fetchTasks();
@@ -67,6 +96,16 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   updateTask: async (taskId, data) => {
+    if (USE_MOCK) {
+      set({
+        tasks: get().tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, ...data, conditions: (data.conditions as MonitorTask['conditions']) ?? t.conditions }
+            : t,
+        ),
+      });
+      return true;
+    }
     try {
       await monitorApi.update(taskId, data);
       await get().fetchTasks();
@@ -78,6 +117,10 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   deleteTask: async (taskId) => {
+    if (USE_MOCK) {
+      set({ tasks: get().tasks.filter((t) => t.id !== taskId) });
+      return true;
+    }
     try {
       await monitorApi.delete(taskId);
       await get().fetchTasks();
@@ -89,9 +132,10 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   },
 
   markAlertRead: async (alertId) => {
+    set({ alerts: get().alerts.map((a) => (a.id === alertId ? { ...a, isRead: true } : a)) });
+    if (USE_MOCK) return;
     try {
       await monitorApi.markRead(alertId);
-      set({ alerts: get().alerts.map((a) => (a.id === alertId ? { ...a, isRead: true } : a)) });
     } catch (e) {
       set({ error: getParsedApiError(e) });
     }

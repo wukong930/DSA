@@ -6,6 +6,7 @@ import { historyApi } from '../api/history';
 import type { AnalysisReport, HistoryItem, HistoryListResponse, TaskInfo } from '../types/analysis';
 import { getRecentStartDate, getTodayInShanghai } from '../utils/format';
 import { isObviouslyInvalidStockQuery, looksLikeStockCode, validateStockCode } from '../utils/validation';
+import { USE_MOCK, MOCK_HISTORY_ITEMS, MOCK_REPORT_MAOTAI, MOCK_ACTIVE_TASKS } from '../mock/data';
 
 const PAGE_SIZE = 20;
 
@@ -196,14 +197,30 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
   closeMarkdownDrawer: () => set({ markdownDrawerOpen: false }),
 
   loadInitialHistory: async () => {
+    if (USE_MOCK) {
+      set({
+        historyItems: [...MOCK_HISTORY_ITEMS],
+        hasMore: false,
+        isLoadingHistory: false,
+        selectedReport: MOCK_REPORT_MAOTAI,
+        isLoadingReport: false,
+        activeTasks: [...MOCK_ACTIVE_TASKS],
+      });
+      return;
+    }
     await fetchHistory(get, set, { autoSelectFirst: true, reset: true });
   },
 
   refreshHistory: async (silent = false) => {
+    if (USE_MOCK) {
+      set({ historyItems: [...MOCK_HISTORY_ITEMS], hasMore: false, isLoadingHistory: false });
+      return;
+    }
     await fetchHistory(get, set, { reset: true, silent });
   },
 
   loadMoreHistory: async () => {
+    if (USE_MOCK) return;
     const state = get();
     if (state.isLoadingMore || !state.hasMore) {
       return;
@@ -212,6 +229,10 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
   },
 
   selectHistoryItem: async (recordId) => {
+    if (USE_MOCK) {
+      set({ selectedReport: MOCK_REPORT_MAOTAI, isLoadingReport: false });
+      return;
+    }
     const requestId = ++reportRequestSeq;
     const shouldShowInitialLoading = !get().selectedReport;
 
@@ -267,6 +288,15 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
   },
 
   deleteSelectedHistory: async () => {
+    if (USE_MOCK) {
+      const deletedIds = new Set(get().selectedHistoryIds);
+      set({
+        historyItems: get().historyItems.filter((i) => !deletedIds.has(i.id)),
+        selectedHistoryIds: [],
+        isDeletingHistory: false,
+      });
+      return;
+    }
     const state = get();
     const recordIds = Array.from(new Set(state.selectedHistoryIds));
     if (recordIds.length === 0 || state.isDeletingHistory) {
@@ -301,6 +331,10 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
   },
 
   submitAnalysis: async (options) => {
+    if (USE_MOCK) {
+      set({ query: '', isAnalyzing: false });
+      return;
+    }
     const state = get();
     const rawStockCode = options?.stockCode ?? state.query;
     const stockCodeInput = rawStockCode.trim();

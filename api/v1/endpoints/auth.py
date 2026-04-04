@@ -33,6 +33,13 @@ from src.auth import (
 )
 from src.config import Config, setup_env
 from src.core.config_manager import ConfigManager
+from src.user_auth import (
+    authenticate_user,
+    create_db_session,
+    delete_db_session,
+    is_multiuser_mode,
+    verify_db_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +47,12 @@ router = APIRouter()
 
 
 class LoginRequest(BaseModel):
-    """Login request body. For first-time setup use password + password_confirm."""
+    """Login request body. For first-time setup use password + password_confirm.
+    Multi-user mode requires username + password."""
 
     model_config = {"populate_by_name": True}
 
+    username: str | None = Field(default=None, description="Username (multi-user mode)")
     password: str = Field(default="", description="Admin password")
     password_confirm: str | None = Field(default=None, alias="passwordConfirm", description="Confirm (first-time)")
 
@@ -158,9 +167,19 @@ def _get_auth_status_dict(request: Request | None = None) -> dict:
     """Helper to build consistent auth status response body."""
     auth_enabled = is_auth_enabled()
     logged_in = False
+    user_info = None
+    multiuser = is_multiuser_mode()
+
     if auth_enabled and request:
         cookie_val = request.cookies.get(COOKIE_NAME)
-        logged_in = verify_session(cookie_val) if cookie_val else False
+        if cookie_val:
+            if multiuser:
+                user = verify_db_session(cookie_val)
+                if user:
+                    logged_in = True
+                    user_info = user
+            else:
+                logged_in = verify_session(cookie_val)
 
     # setupState determination:
     # - enabled: auth is active
@@ -173,13 +192,17 @@ def _get_auth_status_dict(request: Request | None = None) -> dict:
     else:
         setup_state = "no_password"
 
-    return {
+    result = {
         "authEnabled": auth_enabled,
         "loggedIn": logged_in,
         "passwordSet": _password_set_for_response(auth_enabled),
         "passwordChangeable": is_password_changeable() if auth_enabled else False,
         "setupState": setup_state,
+        "multiUser": multiuser,
     }
+    if user_info:
+        result["user"] = user_info
+    return result
 
 
 @router.get(
@@ -384,6 +407,36 @@ async def auth_login(request: Request, body: LoginRequest):
             },
         )
 
+    # Multi-user mode: authenticate via DB
+    if is_multiuser_mode():
+        username = (body.username or "").strip()
+        if not username:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "username_required", "message": "请输入用户名"},
+            )
+
+        user, err = authenticate_user(username, password)
+        if err:
+            record_login_failure(ip)
+            return JSONResponse(
+                status_code=401,
+                content={"error": "invalid_credentials", "message": err},
+            )
+
+        clear_rate_limit(ip)
+        session_val = create_db_session(user["id"])
+        if not session_val:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "internal_error", "message": "Failed to create session"},
+            )
+
+        resp = JSONResponse(content={"ok": True, "user": user})
+        _set_session_cookie(resp, session_val, request)
+        return resp
+
+    # Legacy single-admin mode
     password_set = is_password_set()
 
     if not password_set:
@@ -467,11 +520,20 @@ async def auth_change_password(body: ChangePasswordRequest):
 )
 async def auth_logout(request: Request):
     """Clear session cookie."""
-    if is_auth_enabled() and not rotate_session_secret():
-        return JSONResponse(
-            status_code=500,
-            content={"error": "internal_error", "message": "Failed to invalidate session"},
-        )
+    cookie_val = request.cookies.get(COOKIE_NAME)
+
+    if is_multiuser_mode():
+        # Multi-user: delete the specific DB session
+        if cookie_val:
+            delete_db_session(cookie_val)
+    else:
+        # Legacy: rotate secret to invalidate all sessions
+        if is_auth_enabled() and not rotate_session_secret():
+            return JSONResponse(
+                status_code=500,
+                content={"error": "internal_error", "message": "Failed to invalidate session"},
+            )
+
     resp = Response(status_code=204)
     resp.delete_cookie(key=COOKIE_NAME, path="/")
     return resp

@@ -620,6 +620,107 @@ class LLMUsage(Base):
     called_at = Column(DateTime, default=datetime.now, index=True)
 
 
+# === 用户与权限模型 ===
+
+class User(Base):
+    """Multi-user accounts with role-based access (admin / analyst)."""
+
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(64), unique=True, nullable=False, index=True)
+    display_name = Column(String(128), nullable=True)
+    password_hash = Column(Text, nullable=False)
+    role = Column(String(16), nullable=False, default='analyst')  # admin / analyst
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    last_login_at = Column(DateTime, nullable=True)
+
+
+class UserSession(Base):
+    """Database-backed user sessions (replaces file-based single-admin sessions)."""
+
+    __tablename__ = 'user_sessions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    session_token = Column(String(128), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.now)
+    expires_at = Column(DateTime, nullable=False)
+
+
+class MonitorTask(Base):
+    """A user-defined stock monitoring task with conditions."""
+
+    __tablename__ = 'monitor_tasks'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    stock_code = Column(String(20), nullable=False, index=True)
+    stock_name = Column(String(64), nullable=True)
+    market = Column(String(10), nullable=False, default='cn')
+    conditions = Column(Text, nullable=False, default='[]')  # JSON array of condition dicts
+    is_active = Column(Boolean, nullable=False, default=True)
+    interval_minutes = Column(Integer, nullable=False, default=15)
+    last_checked_at = Column(DateTime, nullable=True)
+    last_triggered_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class MonitorAlert(Base):
+    """An alert triggered by a monitor task condition match."""
+
+    __tablename__ = 'monitor_alerts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(Integer, ForeignKey('monitor_tasks.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    stock_code = Column(String(20), nullable=False)
+    condition_matched = Column(Text, nullable=False, default='{}')  # JSON
+    indicator_values = Column(Text, nullable=False, default='{}')  # JSON
+    is_read = Column(Boolean, nullable=False, default=False)
+    notified_via = Column(String(32), nullable=True)  # 'feishu', 'sse', etc.
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class ScheduledTask(Base):
+    """A user-defined scheduled analysis task."""
+
+    __tablename__ = 'scheduled_tasks'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    task_type = Column(String(32), nullable=False, default='daily_analysis')  # daily_analysis / custom_range / monitor
+    stock_codes = Column(Text, nullable=False, default='[]')  # JSON array
+    schedule_config = Column(Text, nullable=False, default='{}')  # JSON: cron, start_time, end_time, interval
+    is_active = Column(Boolean, nullable=False, default=True)
+    last_run_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class WatchlistItem(Base):
+    """A stock in a user's watchlist."""
+
+    __tablename__ = 'watchlist_items'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    stock_code = Column(String(20), nullable=False)
+    stock_name = Column(String(64), nullable=True)
+    market = Column(String(10), nullable=False, default='cn')
+    tags = Column(Text, nullable=True, default='[]')  # JSON array of tag strings
+    notes = Column(Text, nullable=True)
+    added_at = Column(DateTime, default=datetime.now)
+
+    __table_args__ = (
+        Index('ix_watchlist_user_stock', 'user_id', 'stock_code', unique=True),
+    )
+
+
 class DatabaseManager:
     """
     数据库管理器 - 单例模式
@@ -653,13 +754,20 @@ class DatabaseManager:
         if db_url is None:
             config = get_config()
             db_url = config.get_db_url()
-        
+
+        # 根据数据库类型设置连接参数
+        engine_kwargs = {
+            "echo": False,
+            "pool_pre_ping": True,
+        }
+        if db_url.startswith("postgresql"):
+            engine_kwargs.update({
+                "pool_size": 5,
+                "max_overflow": 5,
+            })
+
         # 创建数据库引擎
-        self._engine = create_engine(
-            db_url,
-            echo=False,  # 设为 True 可查看 SQL 语句
-            pool_pre_ping=True,  # 连接健康检查
-        )
+        self._engine = create_engine(db_url, **engine_kwargs)
         
         # 创建 Session 工厂
         self._SessionLocal = sessionmaker(

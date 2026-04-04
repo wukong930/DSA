@@ -623,7 +623,8 @@ class Config:
     prefetch_realtime_quotes: bool = True
 
     # === 数据库配置 ===
-    database_path: str = "./data/stock_analysis.db"
+    database_url: Optional[str] = None  # PostgreSQL URL, e.g. postgresql://user:pass@localhost:5432/dsa
+    database_path: str = "./data/stock_analysis.db"  # SQLite fallback
 
     # 是否保存分析上下文快照（用于历史回溯）
     save_context_snapshot: bool = True
@@ -1225,6 +1226,7 @@ class Config:
             ),
             md2img_engine=cls._parse_md2img_engine(os.getenv('MD2IMG_ENGINE', 'wkhtmltoimage')),
             prefetch_realtime_quotes=os.getenv('PREFETCH_REALTIME_QUOTES', 'true').lower() == 'true',
+            database_url=os.getenv('DATABASE_URL') or None,
             database_path=os.getenv('DATABASE_PATH', './data/stock_analysis.db'),
             save_context_snapshot=os.getenv('SAVE_CONTEXT_SNAPSHOT', 'true').lower() == 'true',
             backtest_enabled=os.getenv('BACKTEST_ENABLED', 'true').lower() == 'true',
@@ -2079,9 +2081,11 @@ class Config:
     def get_db_url(self) -> str:
         """
         获取 SQLAlchemy 数据库连接 URL
-        
-        自动创建数据库目录（如果不存在）
+
+        优先使用 DATABASE_URL（PostgreSQL），否则回退到 SQLite
         """
+        if self.database_url:
+            return self.database_url
         db_path = Path(self.database_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{db_path.absolute()}"

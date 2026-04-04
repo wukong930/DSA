@@ -53,6 +53,12 @@ class ResearchAgent:
         "get_daily_history",
         "get_sector_rankings",
         "get_market_indices",
+        "get_technical_indicators",
+        "get_technical_signals",
+        "get_fundamentals",
+        "get_financial_ratios",
+        "get_valuation_data",
+        "dcf_estimate",
     ]
 
     def __init__(

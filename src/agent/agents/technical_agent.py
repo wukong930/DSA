@@ -32,6 +32,9 @@ class TechnicalAgent(BaseAgent):
         "analyze_pattern",
         "get_chip_distribution",
         "get_analysis_context",
+        "get_technical_indicators",
+        "get_technical_signals",
+        "get_selected_indicators",
     ]
 
     def system_prompt(self, ctx: AgentContext) -> str:

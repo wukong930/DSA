@@ -6,6 +6,7 @@
 python-dotenv>=1.0.0        # 环境变量配置管理
 tenacity>=8.2.0             # 重试机制（指数退避）
 sqlalchemy>=2.0.0           # ORM数据库操作
+psycopg2-binary>=2.9.0      # PostgreSQL driver
 schedule>=1.2.0             # 定时任务调度
 exchange-calendars>=4.5.0   # 交易日历（A股/港股/美股，Issue #373）
 
@@ -26,6 +27,7 @@ pandas>=2.0.0               # 数据分析
 pypinyin>=0.50.0            # Name-to-code resolver (pinyin matching)
 openpyxl>=3.1.0             # Excel (.xlsx) parsing for import
 numpy>=1.24.0               # 数值计算
+ta>=0.11.0                  # 技术分析指标库（43 个指标）
 json-repair>=0.55.1         # JSON 修复
 
 # AI 分析

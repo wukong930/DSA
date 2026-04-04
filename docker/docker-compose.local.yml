@@ -1,0 +1,8 @@
+# 本地开发覆盖 — 去掉 HTTPS，使用 nginx.local.conf
+services:
+  nginx:
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../static:/usr/share/nginx/html:ro

@@ -28,6 +28,8 @@ class IntelAgent(BaseAgent):
         "search_stock_news",
         "search_comprehensive_intel",
         "get_stock_info",
+        "get_fundamentals",
+        "get_financial_ratios",
     ]
 
     def system_prompt(self, ctx: AgentContext) -> str:

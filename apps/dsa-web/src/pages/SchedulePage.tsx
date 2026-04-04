@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Clock, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Clock, Pause, Play, Plus, Repeat, Trash2, Zap } from 'lucide-react';
 import { useSchedulerStore } from '../stores/schedulerStore';
-import { AppPage, Card, Badge, EmptyState, ApiErrorAlert, ConfirmDialog, PageHeader } from '../components/common';
+import { AppPage, Card, Badge, StatusDot, EmptyState, ApiErrorAlert, ConfirmDialog, PageHeader } from '../components/common';
 
 const TASK_TYPE_OPTIONS = [
   { value: 'daily_analysis', label: '每日分析' },
@@ -12,6 +12,12 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   daily_analysis: '每日分析',
   custom_range: '自定义区间',
   monitor: '监控',
+};
+
+const TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
+  daily_analysis: <Calendar className="h-4 w-4" />,
+  custom_range: <Repeat className="h-4 w-4" />,
+  monitor: <Zap className="h-4 w-4" />,
 };
 
 const SchedulePage: React.FC = () => {
@@ -73,149 +79,260 @@ const SchedulePage: React.FC = () => {
     return '未知';
   };
 
+  const formatTime = (t: string | null) => {
+    if (!t) return '—';
+    return new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const activeCount = tasks.filter((t) => t.isActive).length;
+  const totalStocks = new Set(tasks.flatMap((t) => t.stockCodes)).size;
+
   return (
     <AppPage>
       <PageHeader title="定时任务" description="管理自动化分析任务的调度计划" />
 
       {error ? <ApiErrorAlert error={error} className="mb-4" /> : null}
 
-      <div className="mb-4 flex justify-end">
+      {/* Stats bar */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="terminal-card flex items-center gap-3 rounded-xl p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'hsl(var(--primary) / 0.12)' }}>
+            <Clock className="h-5 w-5 text-cyan" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{tasks.length}</p>
+            <p className="text-xs text-muted-text">调度任务</p>
+          </div>
+        </div>
+        <div className="terminal-card flex items-center gap-3 rounded-xl p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'hsl(var(--status-active) / 0.12)' }}>
+            <Play className="h-5 w-5 text-success" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{activeCount}</p>
+            <p className="text-xs text-muted-text">运行中</p>
+          </div>
+        </div>
+        <div className="terminal-card flex items-center gap-3 rounded-xl p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'hsl(var(--color-purple) / 0.12)' }}>
+            <Zap className="h-5 w-5 text-purple" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{totalStocks}</p>
+            <p className="text-xs text-muted-text">覆盖股票</p>
+          </div>
+        </div>
+        <div className="terminal-card flex items-center gap-3 rounded-xl p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'hsl(var(--status-triggered) / 0.12)' }}>
+            <Pause className="h-5 w-5 text-warning" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{tasks.length - activeCount}</p>
+            <p className="text-xs text-muted-text">已暂停</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Action */}
+      <div className="mb-4 flex items-center justify-between">
         <button
           type="button"
           onClick={() => setShowForm(!showForm)}
-          className="btn-primary flex items-center gap-1.5 text-sm"
+          className="flex items-center gap-1.5 rounded-xl bg-cyan/12 px-4 py-2.5 text-sm font-medium text-cyan transition-all hover:bg-cyan/18"
         >
           <Plus className="h-4 w-4" />
           新建任务
         </button>
       </div>
 
+      {/* Create form */}
       {showForm && (
-        <Card className="mb-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col">
-              <label className="mb-2 text-sm font-medium text-foreground">任务类型</label>
-              <select
-                value={taskType}
-                onChange={(e) => setTaskType(e.target.value)}
-                className="input-surface input-focus-glow h-11 w-full appearance-none rounded-xl border bg-transparent px-4 text-sm transition-all focus:outline-none"
-              >
-                {TASK_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value} className="bg-elevated text-foreground">{o.label}</option>
+        <Card className="mb-6 border border-cyan/20" padding="lg">
+          <h3 className="mb-4 text-base font-semibold text-foreground">新建定时任务</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-foreground">任务类型</label>
+              <div className="flex gap-2">
+                {TASK_TYPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setTaskType(opt.value)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all ${
+                      taskType === opt.value
+                        ? 'border-cyan/40 bg-cyan/10 text-cyan'
+                        : 'border-border/60 text-secondary-text hover:border-border hover:text-foreground'
+                    }`}
+                  >
+                    {TASK_TYPE_ICONS[opt.value]}
+                    {opt.label}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <label className="mb-2 text-sm font-medium text-foreground">股票代码（逗号分隔）</label>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-foreground">股票代码</label>
               <input
+                type="text"
                 value={stockCodesInput}
                 onChange={(e) => setStockCodesInput(e.target.value)}
-                placeholder="如 600519, 000858"
+                placeholder="多个代码用逗号分隔，如 600519, 000858"
                 className="input-surface input-focus-glow h-11 w-full rounded-xl border bg-transparent px-4 text-sm transition-all focus:outline-none"
               />
+              <p className="mt-1 text-xs text-muted-text">支持 A股/港股/美股代码</p>
             </div>
-          </div>
 
-          <div className="mt-4">
-            <label className="mb-2 block text-sm font-medium text-foreground">调度方式</label>
-            <div className="flex gap-3">
-              {[
-                { value: 'daily', label: '每天定时' },
-                { value: 'interval', label: '固定间隔' },
-                { value: 'cron', label: '工作日定时' },
-              ].map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setScheduleType(o.value)}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                    scheduleType === o.value
-                      ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                      : 'border-border/70 text-secondary-text hover:text-foreground'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-foreground">调度方式</label>
+              <div className="flex gap-2">
+                {[
+                  { value: 'daily', label: '每天', icon: <Calendar className="h-3.5 w-3.5" /> },
+                  { value: 'interval', label: '固定间隔', icon: <Repeat className="h-3.5 w-3.5" /> },
+                  { value: 'cron', label: '工作日', icon: <Clock className="h-3.5 w-3.5" /> },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setScheduleType(opt.value)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all ${
+                      scheduleType === opt.value
+                        ? 'border-cyan/40 bg-cyan/10 text-cyan'
+                        : 'border-border/60 text-secondary-text hover:border-border hover:text-foreground'
+                    }`}
+                  >
+                    {opt.icon}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {(scheduleType === 'daily' || scheduleType === 'cron') && (
-            <div className="mt-4 flex items-center gap-2">
-              <label className="text-sm text-secondary-text">执行时间</label>
-              <input
-                type="number"
-                min={0}
-                max={23}
-                value={hour}
-                onChange={(e) => setHour(e.target.value)}
-                className="input-surface input-focus-glow h-11 w-20 rounded-xl border bg-transparent px-3 text-center text-sm transition-all focus:outline-none"
-              />
-              <span className="text-secondary-text">:</span>
-              <input
-                type="number"
-                min={0}
-                max={59}
-                value={minute}
-                onChange={(e) => setMinute(e.target.value)}
-                className="input-surface input-focus-glow h-11 w-20 rounded-xl border bg-transparent px-3 text-center text-sm transition-all focus:outline-none"
-              />
+            {scheduleType === 'interval' ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">间隔（分钟）</label>
+                <input
+                  type="number"
+                  value={intervalMinutes}
+                  onChange={(e) => setIntervalMinutes(e.target.value)}
+                  className="input-surface input-focus-glow h-11 w-32 rounded-xl border bg-transparent px-4 text-sm transition-all focus:outline-none"
+                />
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">时</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    value={hour}
+                    onChange={(e) => setHour(e.target.value)}
+                    className="input-surface input-focus-glow h-11 w-20 rounded-xl border bg-transparent px-4 text-sm transition-all focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">分</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={minute}
+                    onChange={(e) => setMinute(e.target.value)}
+                    className="input-surface input-focus-glow h-11 w-20 rounded-xl border bg-transparent px-4 text-sm transition-all focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => void handleCreate()}
+                className="rounded-xl bg-cyan px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
+              >
+                创建
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="rounded-xl border border-border/60 px-5 py-2.5 text-sm text-secondary-text transition-colors hover:text-foreground"
+              >
+                取消
+              </button>
             </div>
-          )}
-
-          {scheduleType === 'interval' && (
-            <div className="mt-4 flex items-center gap-2">
-              <label className="text-sm text-secondary-text">每</label>
-              <input
-                type="number"
-                min={1}
-                value={intervalMinutes}
-                onChange={(e) => setIntervalMinutes(e.target.value)}
-                className="input-surface input-focus-glow h-11 w-24 rounded-xl border bg-transparent px-3 text-center text-sm transition-all focus:outline-none"
-              />
-              <span className="text-sm text-secondary-text">分钟执行一次</span>
-            </div>
-          )}
-
-          <div className="mt-4 flex justify-end">
-            <button type="button" onClick={() => void handleCreate()} className="btn-primary text-sm">
-              创建任务
-            </button>
           </div>
         </Card>
       )}
 
+      {/* Task list */}
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan/20 border-t-cyan" />
+        <div className="flex justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan/30 border-t-cyan" />
         </div>
       ) : tasks.length === 0 ? (
-        <EmptyState icon={<Clock className="h-10 w-10" />} title="暂无定时任务" description="点击上方按钮创建自动化分析任务" />
+        <EmptyState icon={<Clock className="h-10 w-10" />} title="暂无定时任务" description="创建定时任务，自动化你的分析流程" />
       ) : (
         <div className="space-y-3">
           {tasks.map((task) => (
-            <Card key={task.id} padding="sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Badge variant={task.isActive ? 'success' : 'default'}>
-                    {task.isActive ? '运行中' : '已暂停'}
-                  </Badge>
-                  <Badge variant="info">{TASK_TYPE_LABELS[task.taskType] || task.taskType}</Badge>
-                  <span className="text-sm text-foreground">
-                    {task.stockCodes.join(', ')}
-                  </span>
+            <Card key={task.id} className="group transition-all hover:border-border/80" padding="none">
+              <div className="flex items-start gap-4 p-5">
+                {/* Left: icon */}
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background: task.isActive
+                      ? 'hsl(var(--primary) / 0.12)'
+                      : 'hsl(var(--muted-text) / 0.08)',
+                  }}
+                >
+                  {TASK_TYPE_ICONS[task.taskType] || <Clock className="h-5 w-5" />}
                 </div>
-                <div className="flex items-center gap-2">
+
+                {/* Center: info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-semibold text-foreground">
+                      {TASK_TYPE_LABELS[task.taskType] || task.taskType}
+                    </span>
+                    <Badge variant={task.isActive ? 'success' : 'default'} size="sm">
+                      <StatusDot tone={task.isActive ? 'success' : 'neutral'} className="mr-0.5" />
+                      {task.isActive ? '运行中' : '已暂停'}
+                    </Badge>
+                  </div>
+
+                  {/* Stock codes */}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {task.stockCodes.map((code) => (
+                      <Badge key={code} variant="info" size="sm">{code}</Badge>
+                    ))}
+                  </div>
+
+                  {/* Schedule + time info */}
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-text">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {formatSchedule(task.scheduleConfig)}
+                    </span>
+                    <span>下次运行: {formatTime(task.nextRunAt)}</span>
+                    <span>上次运行: {formatTime(task.lastRunAt)}</span>
+                  </div>
+                </div>
+
+                {/* Right: actions */}
+                <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
                     onClick={() => handleToggle(task.id, task.isActive)}
-                    className={`rounded-lg border px-3 py-1 text-xs transition-colors ${
+                    className={`rounded-lg p-2 transition-colors ${
                       task.isActive
-                        ? 'border-warning/40 text-warning hover:bg-warning/10'
-                        : 'border-success/40 text-success hover:bg-success/10'
+                        ? 'text-success hover:bg-success/10'
+                        : 'text-muted-text hover:bg-muted/50'
                     }`}
+                    title={task.isActive ? '暂停' : '启用'}
+                    aria-label={task.isActive ? '暂停' : '启用'}
                   >
-                    {task.isActive ? '暂停' : '启用'}
+                    {task.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </button>
                   <button
                     type="button"
@@ -226,11 +343,6 @@ const SchedulePage: React.FC = () => {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-secondary-text">
-                <span>调度: {formatSchedule(task.scheduleConfig)}</span>
-                {task.nextRunAt ? <span>下次运行: {new Date(task.nextRunAt).toLocaleString('zh-CN')}</span> : null}
-                {task.lastRunAt ? <span>上次运行: {new Date(task.lastRunAt).toLocaleString('zh-CN')}</span> : null}
               </div>
             </Card>
           ))}

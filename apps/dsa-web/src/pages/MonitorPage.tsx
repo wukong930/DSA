@@ -18,7 +18,7 @@ type Tab = 'tasks' | 'alerts';
 
 const MonitorPage: React.FC = () => {
   const {
-    tasks, alerts, indicators, loading, error,
+    tasks, alerts, indicators, indicatorData, loading, error,
     fetchTasks, fetchAlerts, fetchIndicators,
     createTask, updateTask, deleteTask, markAlertRead,
   } = useMonitorStore();
@@ -210,7 +210,7 @@ const MonitorPage: React.FC = () => {
           </div>
           <div className="mb-4">
             <label className="mb-2 block text-sm font-medium text-foreground">触发条件</label>
-            <ConditionEditor conditions={conditions} onChange={setConditions} indicators={indicators} />
+            <ConditionEditor conditions={conditions} onChange={setConditions} indicators={indicators} indicatorData={indicatorData} />
           </div>
           <div className="flex justify-end gap-3">
             <button

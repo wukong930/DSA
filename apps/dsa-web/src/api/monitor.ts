@@ -25,6 +25,27 @@ export interface MonitorAlert {
   createdAt: string | null;
 }
 
+export interface IndicatorItem {
+  name: string;
+  cnName: string;
+  cnDesc: string;
+  description: string;
+  category: string;
+}
+
+export interface PresetTemplate {
+  key: string;
+  name: string;
+  description: string;
+  conditions: Array<{ indicator: string; op: string; value?: number; indicator2?: string }>;
+}
+
+export interface IndicatorsResponse {
+  indicators: Record<string, IndicatorItem[]>;
+  templates: PresetTemplate[];
+  scenarios: Record<string, string>;
+}
+
 export const monitorApi = {
   list: async (): Promise<{ tasks: MonitorTask[]; total: number }> => {
     const res = await apiClient.get<Record<string, unknown>>('/api/v1/monitor');
@@ -75,9 +96,28 @@ export const monitorApi = {
     return toCamelCase(res.data);
   },
 
-  getIndicators: async (): Promise<{ indicators: string[] }> => {
-    const res = await apiClient.get<Record<string, Array<{ name: string }>>>('/api/v1/monitor/indicators');
-    const indicators = Object.values(res.data).flat().map((item) => item.name);
-    return { indicators };
+  getIndicators: async (): Promise<IndicatorsResponse> => {
+    const res = await apiClient.get<Record<string, unknown>>('/api/v1/monitor/indicators');
+    const data = res.data as Record<string, unknown>;
+    // Rich response with scenarios, templates, and grouped indicators
+    const rawIndicators = (data.indicators ?? data.flat ?? {}) as Record<string, Array<Record<string, string>>>;
+    const indicators: Record<string, IndicatorItem[]> = {};
+    for (const [group, items] of Object.entries(rawIndicators)) {
+      indicators[group] = (items || []).map((item) => ({
+        name: item.name,
+        cnName: item.cn_name || item.name,
+        cnDesc: item.cn_desc || item.description || '',
+        description: item.description || '',
+        category: item.category || group,
+      }));
+    }
+    const templates = ((data.templates ?? []) as Array<Record<string, unknown>>).map((t) => ({
+      key: t.key as string,
+      name: t.name as string,
+      description: t.description as string,
+      conditions: t.conditions as PresetTemplate['conditions'],
+    }));
+    const scenarios = (data.scenarios ?? {}) as Record<string, string>;
+    return { indicators, templates, scenarios };
   },
 };

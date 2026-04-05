@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { monitorApi } from '../api/monitor';
-import type { MonitorTask, MonitorAlert } from '../api/monitor';
+import type { MonitorTask, MonitorAlert, IndicatorsResponse } from '../api/monitor';
 import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
 import { USE_MOCK, MOCK_MONITOR_TASKS, MOCK_MONITOR_ALERTS, MOCK_INDICATORS } from '../mock/data';
@@ -8,7 +8,10 @@ import { USE_MOCK, MOCK_MONITOR_TASKS, MOCK_MONITOR_ALERTS, MOCK_INDICATORS } fr
 interface MonitorState {
   tasks: MonitorTask[];
   alerts: MonitorAlert[];
+  /** Flat indicator name list (backward compat) */
   indicators: string[];
+  /** Rich indicator data with scenarios, templates, grouped items */
+  indicatorData: IndicatorsResponse | null;
   loading: boolean;
   error: ParsedApiError | null;
 
@@ -25,6 +28,7 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   tasks: [],
   alerts: [],
   indicators: [],
+  indicatorData: null,
   loading: false,
   error: null,
 
@@ -62,7 +66,9 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
     }
     try {
       const res = await monitorApi.getIndicators();
-      set({ indicators: res.indicators });
+      // Flat list for backward compat
+      const flat = Object.values(res.indicators).flat().map((item) => item.name);
+      set({ indicators: flat, indicatorData: res });
     } catch (e) {
       // silent — indicators are optional
     }

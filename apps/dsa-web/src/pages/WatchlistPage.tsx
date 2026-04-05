@@ -19,7 +19,7 @@ const WatchlistPage: React.FC = () => {
     items, filterResults, loading, filtering, error,
     fetchItems, addItem, removeItem, clearFilter, filterWatchlist,
   } = useWatchlistStore();
-  const { indicators, fetchIndicators } = useMonitorStore();
+  const { indicators, indicatorData, fetchIndicators } = useMonitorStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
@@ -238,7 +238,7 @@ const WatchlistPage: React.FC = () => {
       {showFilter && (
         <Card className="mb-6 border border-purple/20" padding="lg">
           <h3 className="mb-4 text-sm font-semibold text-foreground">条件筛选</h3>
-          <ConditionEditor conditions={conditions} onChange={setConditions} indicators={indicators} />
+          <ConditionEditor conditions={conditions} onChange={setConditions} indicators={indicators} indicatorData={indicatorData} />
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"

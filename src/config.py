@@ -664,6 +664,9 @@ class Config:
     enable_realtime_technical_indicators: bool = True
     # 筹码分布开关（该接口不稳定，云端部署建议关闭）
     enable_chip_distribution: bool = True
+    # TimesFM 时序预测开关（需要额外安装 timesfm + torch，内存需求 ~1GB）
+    enable_forecast: bool = False
+    forecast_horizon_days: int = 5
     # 东财接口补丁开关
     enable_eastmoney_patch: bool = False
     # 实时行情数据源优先级（逗号分隔）
@@ -1287,6 +1290,8 @@ class Config:
                 'ENABLE_REALTIME_TECHNICAL_INDICATORS', 'true'
             ).lower() == 'true',
             enable_chip_distribution=os.getenv('ENABLE_CHIP_DISTRIBUTION', 'true').lower() == 'true',
+            enable_forecast=os.getenv('ENABLE_FORECAST', 'false').lower() == 'true',
+            forecast_horizon_days=int(os.getenv('FORECAST_HORIZON_DAYS', '5')),
             # 东财接口补丁开关
             enable_eastmoney_patch=os.getenv('ENABLE_EASTMONEY_PATCH', 'false').lower() == 'true',
             # 实时行情数据源优先级：

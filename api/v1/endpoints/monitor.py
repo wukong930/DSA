@@ -150,4 +150,15 @@ async def alert_mark_read(request: Request, alert_id: int):
 @router.get("/indicators", summary="List available indicators for conditions")
 async def list_indicators():
     from src.services.ta_indicator_service import TAIndicatorService
-    return TAIndicatorService.list_indicators()
+    return {
+        "indicators": TAIndicatorService.list_indicators_rich(),
+        "templates": TAIndicatorService.list_templates(),
+        "scenarios": {
+            "timing": "判断买卖时机",
+            "trend": "判断趋势方向",
+            "risk": "判断风险大小",
+            "flow": "判断资金流向",
+        },
+        # Legacy flat list for backward compatibility
+        "flat": TAIndicatorService.list_indicators(),
+    }

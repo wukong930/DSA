@@ -113,6 +113,19 @@ class StockAnalysisPipeline:
             logger.info("筹码分布分析已启用")
         else:
             logger.info("筹码分布分析已禁用")
+
+        # 初始化时序预测服务（可选）
+        self.forecast_service = None
+        if self.config.enable_forecast:
+            try:
+                from src.services.forecast_service import ForecastService
+                self.forecast_service = ForecastService()
+                logger.info("TimesFM 时序预测已启用")
+            except Exception as e:
+                logger.warning(f"TimesFM 初始化失败，预测功能已禁用: {e}")
+        else:
+            logger.info("TimesFM 时序预测已禁用")
+
         if self.search_service.is_available:
             logger.info("搜索服务已启用")
         else:
@@ -313,6 +326,24 @@ class StockAnalysisPipeline:
                     trend_result,
                 )
 
+            # Step 3.5: 时序预测（可选，TimesFM）
+            forecast_result = None
+            if self.forecast_service is not None:
+                try:
+                    end_date_fc = date.today()
+                    start_date_fc = end_date_fc - timedelta(days=365)  # ~250 trading days
+                    fc_bars = self.db.get_data_range(code, start_date_fc, end_date_fc)
+                    if fc_bars and len(fc_bars) >= 30:
+                        fc_df = pd.DataFrame([bar.to_dict() for bar in fc_bars])
+                        forecast_result = self.forecast_service.forecast(
+                            fc_df, code,
+                            horizon_days=self.config.forecast_horizon_days,
+                        )
+                    else:
+                        logger.info(f"{stock_name}({code}) 历史数据不足，跳过时序预测")
+                except Exception as e:
+                    logger.warning(f"{stock_name}({code}) 时序预测失败: {e}")
+
             # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
             news_context = None
             if self.search_service.is_available:
@@ -381,12 +412,13 @@ class StockAnalysisPipeline:
             
             # Step 6: 增强上下文数据（添加实时行情、筹码、趋势分析结果、股票名称）
             enhanced_context = self._enhance_context(
-                context, 
-                realtime_quote, 
+                context,
+                realtime_quote,
                 chip_data,
                 trend_result,
                 stock_name,  # 传入股票名称
                 fundamental_context,
+                forecast_result,
             )
             
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
@@ -441,7 +473,8 @@ class StockAnalysisPipeline:
         chip_data: Optional[ChipDistribution],
         trend_result: Optional[TrendAnalysisResult],
         stock_name: str = "",
-        fundamental_context: Optional[Dict[str, Any]] = None
+        fundamental_context: Optional[Dict[str, Any]] = None,
+        forecast_result=None,
     ) -> Dict[str, Any]:
         """
         增强分析上下文
@@ -517,6 +550,10 @@ class StockAnalysisPipeline:
                 'signal_reasons': trend_result.signal_reasons,
                 'risk_factors': trend_result.risk_factors,
             }
+
+        # 添加时序预测结果
+        if forecast_result:
+            enhanced['forecast'] = forecast_result.to_dict()
 
         # Issue #234: Override today with realtime OHLC + trend MA for intraday analysis
         # Guard: trend_result.ma5 > 0 ensures MA calculation succeeded (data sufficient)

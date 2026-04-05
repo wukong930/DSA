@@ -8,6 +8,7 @@ Provides full-set computation, selective computation, and signal extraction.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
 import pandas as pd
@@ -44,57 +45,117 @@ from ta.volume import (
 
 logger = logging.getLogger(__name__)
 
-# Indicator category registry: name → (category, description)
-INDICATOR_CATALOG: dict[str, tuple[str, str]] = {
-    # Trend
-    "sma_20": ("trend", "SMA 20"),
-    "sma_50": ("trend", "SMA 50"),
-    "sma_200": ("trend", "SMA 200"),
-    "ema_12": ("trend", "EMA 12"),
-    "ema_26": ("trend", "EMA 26"),
-    "macd": ("trend", "MACD Line"),
-    "macd_signal": ("trend", "MACD Signal"),
-    "macd_histogram": ("trend", "MACD Histogram"),
-    "adx": ("trend", "ADX"),
-    "adx_pos": ("trend", "ADX +DI"),
-    "adx_neg": ("trend", "ADX -DI"),
-    "ichimoku_a": ("trend", "Ichimoku Span A"),
-    "ichimoku_b": ("trend", "Ichimoku Span B"),
-    "ichimoku_base": ("trend", "Ichimoku Base Line"),
-    "ichimoku_conv": ("trend", "Ichimoku Conversion Line"),
-    "psar": ("trend", "Parabolic SAR"),
-    "aroon_up": ("trend", "Aroon Up"),
-    "aroon_down": ("trend", "Aroon Down"),
-    "aroon_indicator": ("trend", "Aroon Indicator"),
-    # Momentum
-    "rsi_14": ("momentum", "RSI 14"),
-    "stoch_rsi": ("momentum", "Stochastic RSI"),
-    "stoch_rsi_k": ("momentum", "Stochastic RSI %K"),
-    "stoch_rsi_d": ("momentum", "Stochastic RSI %D"),
-    "stoch_k": ("momentum", "Stochastic %K"),
-    "stoch_d": ("momentum", "Stochastic %D"),
-    "tsi": ("momentum", "TSI"),
-    "williams_r": ("momentum", "Williams %R"),
-    # Volatility
-    "bb_upper": ("volatility", "Bollinger Upper"),
-    "bb_middle": ("volatility", "Bollinger Middle"),
-    "bb_lower": ("volatility", "Bollinger Lower"),
-    "bb_width": ("volatility", "Bollinger Width"),
-    "bb_pband": ("volatility", "Bollinger %B"),
-    "atr": ("volatility", "ATR"),
-    "kc_upper": ("volatility", "Keltner Upper"),
-    "kc_middle": ("volatility", "Keltner Middle"),
-    "kc_lower": ("volatility", "Keltner Lower"),
-    "dc_upper": ("volatility", "Donchian Upper"),
-    "dc_middle": ("volatility", "Donchian Middle"),
-    "dc_lower": ("volatility", "Donchian Lower"),
-    # Volume
-    "obv": ("volume", "OBV"),
-    "mfi": ("volume", "MFI"),
-    "vwap": ("volume", "VWAP"),
-    "cmf": ("volume", "Chaikin Money Flow"),
-    "force_index": ("volume", "Force Index"),
+
+# ---------------------------------------------------------------------------
+# Indicator metadata
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class IndicatorMeta:
+    category: str       # 原始分类: trend / momentum / volatility / volume
+    description: str    # 英文描述: "SMA 20"
+    cn_name: str        # 中文名: "20日均线"
+    cn_desc: str        # 通俗解释
+    scenario: str       # 场景分组: timing / trend / risk / flow
+
+
+# Indicator category registry: name → IndicatorMeta
+INDICATOR_CATALOG: dict[str, IndicatorMeta] = {
+    # ── Trend ──
+    "sma_20":          IndicatorMeta("trend", "SMA 20",                  "20日均线",       "近20天平均价格，判断短期趋势方向",           "trend"),
+    "sma_50":          IndicatorMeta("trend", "SMA 50",                  "50日均线",       "近50天平均价格，判断中期趋势方向",           "trend"),
+    "sma_200":         IndicatorMeta("trend", "SMA 200",                 "200日均线",      "近200天平均价格，判断长期趋势（牛熊分界线）", "trend"),
+    "ema_12":          IndicatorMeta("trend", "EMA 12",                  "12日指数均线",   "对近期价格更敏感的短期均线",                 "trend"),
+    "ema_26":          IndicatorMeta("trend", "EMA 26",                  "26日指数均线",   "中期指数均线，常与EMA12配合使用",            "trend"),
+    "macd":            IndicatorMeta("trend", "MACD Line",               "MACD 线",        "快慢均线差值，判断趋势动能变化",             "timing"),
+    "macd_signal":     IndicatorMeta("trend", "MACD Signal",             "MACD 信号线",    "MACD的平滑线，金叉死叉的参考线",            "timing"),
+    "macd_histogram":  IndicatorMeta("trend", "MACD Histogram",          "MACD 柱状图",    "MACD与信号线的差值，红柱看涨绿柱看跌",      "timing"),
+    "adx":             IndicatorMeta("trend", "ADX",                     "趋势强度 ADX",   "衡量趋势强弱，>25有趋势 <20无趋势",         "trend"),
+    "adx_pos":         IndicatorMeta("trend", "ADX +DI",                 "ADX 多头指标",   "多头力量强度，越高多头越强",                 "trend"),
+    "adx_neg":         IndicatorMeta("trend", "ADX -DI",                 "ADX 空头指标",   "空头力量强度，越高空头越强",                 "trend"),
+    "ichimoku_a":      IndicatorMeta("trend", "Ichimoku Span A",         "一目均衡 先行A", "云层上沿，价格在云层上方为多头",             "trend"),
+    "ichimoku_b":      IndicatorMeta("trend", "Ichimoku Span B",         "一目均衡 先行B", "云层下沿，价格在云层下方为空头",             "trend"),
+    "ichimoku_base":   IndicatorMeta("trend", "Ichimoku Base Line",      "一目均衡 基准线", "中期均衡价格，可作为支撑/阻力参考",         "trend"),
+    "ichimoku_conv":   IndicatorMeta("trend", "Ichimoku Conversion Line","一目均衡 转换线", "短期均衡价格，与基准线交叉产生信号",         "trend"),
+    "psar":            IndicatorMeta("trend", "Parabolic SAR",           "抛物线 SAR",     "跟踪止损指标，点在价格下方为多头",           "trend"),
+    "aroon_up":        IndicatorMeta("trend", "Aroon Up",                "阿隆上升线",     "衡量上升趋势强度，越高上涨趋势越强",         "trend"),
+    "aroon_down":      IndicatorMeta("trend", "Aroon Down",              "阿隆下降线",     "衡量下降趋势强度，越高下跌趋势越强",         "trend"),
+    "aroon_indicator": IndicatorMeta("trend", "Aroon Indicator",         "阿隆振荡器",     "上升线与下降线之差，正值看涨负值看跌",       "trend"),
+    # ── Momentum ──
+    "rsi_14":          IndicatorMeta("momentum", "RSI 14",               "RSI 相对强弱(14日)", ">70超买可能回调，<30超卖可能反弹",       "timing"),
+    "stoch_rsi":       IndicatorMeta("momentum", "Stochastic RSI",       "随机RSI",            "RSI的随机指标化，更灵敏的超买超卖信号",   "timing"),
+    "stoch_rsi_k":     IndicatorMeta("momentum", "Stochastic RSI %K",    "随机RSI %K线",       "随机RSI快线，与%D交叉产生买卖信号",       "timing"),
+    "stoch_rsi_d":     IndicatorMeta("momentum", "Stochastic RSI %D",    "随机RSI %D线",       "随机RSI慢线，用于确认%K线信号",           "timing"),
+    "stoch_k":         IndicatorMeta("momentum", "Stochastic %K",        "KDJ %K线",           "随机指标快线，>80超买 <20超卖",           "timing"),
+    "stoch_d":         IndicatorMeta("momentum", "Stochastic %D",        "KDJ %D线",           "随机指标慢线，与%K交叉产生金叉死叉",      "timing"),
+    "tsi":             IndicatorMeta("momentum", "TSI",                   "真实强度指数",       "双重平滑动量指标，正值看涨负值看跌",       "timing"),
+    "williams_r":      IndicatorMeta("momentum", "Williams %R",          "威廉指标",           ">-20超买可能回调，<-80超卖可能反弹",       "timing"),
+    # ── Volatility ──
+    "bb_upper":        IndicatorMeta("volatility", "Bollinger Upper",    "布林带上轨",     "价格触及上轨可能回落",                       "risk"),
+    "bb_middle":       IndicatorMeta("volatility", "Bollinger Middle",   "布林带中轨",     "20日均线，布林带的中心线",                   "risk"),
+    "bb_lower":        IndicatorMeta("volatility", "Bollinger Lower",    "布林带下轨",     "价格触及下轨可能反弹",                       "risk"),
+    "bb_width":        IndicatorMeta("volatility", "Bollinger Width",    "布林带宽度",     "带宽越窄波动越小，可能即将变盘",             "risk"),
+    "bb_pband":        IndicatorMeta("volatility", "Bollinger %B",       "布林带 %B",      "价格在布林带中的位置，>1超买 <0超卖",        "risk"),
+    "atr":             IndicatorMeta("volatility", "ATR",                "平均真实波幅",   "衡量价格波动幅度，越大风险越高",             "risk"),
+    "kc_upper":        IndicatorMeta("volatility", "Keltner Upper",      "肯特纳上轨",     "基于ATR的通道上沿，突破可能加速上涨",        "risk"),
+    "kc_middle":       IndicatorMeta("volatility", "Keltner Middle",     "肯特纳中轨",     "指数均线，通道的中心线",                     "risk"),
+    "kc_lower":        IndicatorMeta("volatility", "Keltner Lower",      "肯特纳下轨",     "基于ATR的通道下沿，跌破可能加速下跌",        "risk"),
+    "dc_upper":        IndicatorMeta("volatility", "Donchian Upper",     "唐奇安上轨",     "N日最高价，突破为买入信号",                  "risk"),
+    "dc_middle":       IndicatorMeta("volatility", "Donchian Middle",    "唐奇安中轨",     "N日最高最低价的中间值",                      "risk"),
+    "dc_lower":        IndicatorMeta("volatility", "Donchian Lower",     "唐奇安下轨",     "N日最低价，跌破为卖出信号",                  "risk"),
+    # ── Volume ──
+    "obv":             IndicatorMeta("volume", "OBV",                    "能量潮 OBV",     "累计成交量判断资金流入流出方向",             "flow"),
+    "mfi":             IndicatorMeta("volume", "MFI",                    "资金流量指数",   ">80资金过热，<20资金不足，类似RSI",          "flow"),
+    "vwap":            IndicatorMeta("volume", "VWAP",                   "成交量加权均价", "当日平均成本线，机构常用参考价",             "flow"),
+    "cmf":             IndicatorMeta("volume", "Chaikin Money Flow",     "蔡金资金流",     "正值资金流入看涨，负值资金流出看跌",         "flow"),
+    "force_index":     IndicatorMeta("volume", "Force Index",            "力量指数",       "结合价格变化和成交量的动量指标",             "flow"),
 }
+
+# ---------------------------------------------------------------------------
+# Preset strategy templates (方案 C)
+# ---------------------------------------------------------------------------
+
+PRESET_TEMPLATES: list[dict] = [
+    {
+        "key": "golden_cross",
+        "name": "金叉买入",
+        "description": "MACD 金叉，短期动能转强，买入信号",
+        "conditions": [{"indicator": "macd_histogram", "op": "cross_above", "value": 0}],
+    },
+    {
+        "key": "oversold_bounce",
+        "name": "超卖反弹",
+        "description": "RSI 低于 30 进入超卖区间，可能反弹",
+        "conditions": [{"indicator": "rsi_14", "op": "<", "value": 30}],
+    },
+    {
+        "key": "overbought_warning",
+        "name": "超买预警",
+        "description": "RSI 高于 70 进入超买区间，注意回调风险",
+        "conditions": [{"indicator": "rsi_14", "op": ">", "value": 70}],
+    },
+    {
+        "key": "bollinger_breakout",
+        "name": "突破上轨",
+        "description": "价格突破布林带上轨，可能开启上涨行情",
+        "conditions": [{"indicator": "close", "op": ">", "indicator2": "bb_upper"}],
+    },
+    {
+        "key": "trend_follow",
+        "name": "趋势跟踪",
+        "description": "ADX 确认趋势存在，价格站上 50 日均线",
+        "conditions": [
+            {"indicator": "adx", "op": ">", "value": 25},
+            {"indicator": "close", "op": ">", "indicator2": "sma_50"},
+        ],
+    },
+    {
+        "key": "death_cross",
+        "name": "死叉卖出",
+        "description": "MACD 死叉，短期动能转弱，卖出信号",
+        "conditions": [{"indicator": "macd_histogram", "op": "cross_below", "value": 0}],
+    },
+]
 
 
 class TAIndicatorService:
@@ -347,11 +408,11 @@ class TAIndicatorService:
         latest = df.iloc[-1]
         summary: dict = {"trend": {}, "momentum": {}, "volatility": {}, "volume": {}}
 
-        for name, (category, desc) in INDICATOR_CATALOG.items():
+        for name, meta in INDICATOR_CATALOG.items():
             val = latest.get(name)
             if pd.notna(val):
-                summary[category][name] = {
-                    "label": desc,
+                summary[meta.category][name] = {
+                    "label": meta.description,
                     "value": round(float(val), 4),
                 }
 
@@ -359,8 +420,27 @@ class TAIndicatorService:
 
     @staticmethod
     def list_indicators() -> dict[str, list[dict]]:
-        """Return available indicators grouped by category."""
+        """Return available indicators grouped by category (legacy format)."""
         result: dict[str, list[dict]] = {}
-        for name, (category, desc) in INDICATOR_CATALOG.items():
-            result.setdefault(category, []).append({"name": name, "description": desc})
+        for name, meta in INDICATOR_CATALOG.items():
+            result.setdefault(meta.category, []).append({"name": name, "description": meta.description})
         return result
+
+    @staticmethod
+    def list_indicators_rich() -> dict[str, list[dict]]:
+        """Return indicators grouped by scenario with rich metadata."""
+        result: dict[str, list[dict]] = {}
+        for name, meta in INDICATOR_CATALOG.items():
+            result.setdefault(meta.scenario, []).append({
+                "name": name,
+                "cn_name": meta.cn_name,
+                "cn_desc": meta.cn_desc,
+                "description": meta.description,
+                "category": meta.category,
+            })
+        return result
+
+    @staticmethod
+    def list_templates() -> list[dict]:
+        """Return preset strategy templates."""
+        return PRESET_TEMPLATES

@@ -37,10 +37,16 @@ from src.services.system_config_service import SystemConfigService
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Initialize and release shared services for the app lifecycle."""
+    from src.services.scheduler_service import SchedulerService
+
     app.state.system_config_service = SystemConfigService()
+    scheduler = SchedulerService()
+    app.state.scheduler_service = scheduler
+    await scheduler.start()
     try:
         yield
     finally:
+        await scheduler.stop()
         if hasattr(app.state, "system_config_service"):
             delattr(app.state, "system_config_service")
 

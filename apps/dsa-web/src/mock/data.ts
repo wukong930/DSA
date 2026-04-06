@@ -243,6 +243,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     id: 1, userId: 0, taskType: 'daily_analysis',
     stockCodes: ['600519', '000858', '300750'],
     scheduleConfig: { type: 'daily', time: '08:30', timezone: 'Asia/Shanghai' },
+    analysisMode: 'traditional',
     isActive: true,
     lastRunAt: '2026-04-04T08:30:00',
     nextRunAt: '2026-04-07T08:30:00',
@@ -252,6 +253,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     id: 2, userId: 0, taskType: 'daily_analysis',
     stockCodes: ['AAPL', 'NVDA'],
     scheduleConfig: { type: 'daily', time: '22:00', timezone: 'America/New_York' },
+    analysisMode: 'traditional',
     isActive: true,
     lastRunAt: '2026-04-03T22:00:00',
     nextRunAt: '2026-04-04T22:00:00',
@@ -261,6 +263,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     id: 3, userId: 0, taskType: 'daily_analysis',
     stockCodes: ['hk00700', 'hk09988'],
     scheduleConfig: { type: 'workday', time: '09:00', timezone: 'Asia/Hong_Kong' },
+    analysisMode: 'agent',
     isActive: true,
     lastRunAt: '2026-04-04T09:00:00',
     nextRunAt: '2026-04-07T09:00:00',
@@ -270,6 +273,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     id: 4, userId: 0, taskType: 'daily_analysis',
     stockCodes: ['002594', '601318', '000001'],
     scheduleConfig: { type: 'interval', intervalMinutes: 120 },
+    analysisMode: 'traditional',
     isActive: false,
     lastRunAt: '2026-04-02T14:00:00',
     nextRunAt: null,
@@ -405,4 +409,4 @@ export const MOCK_ACTIVE_TASKS: TaskInfo[] = [];
 // ============ Flag ============
 
 /** Set to true to use mock data instead of API calls */
-export const USE_MOCK = true;
+export const USE_MOCK = false;

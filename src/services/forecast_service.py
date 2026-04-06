@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""TimesFM v2.5 Price Forecast Service.
+"""TimesFM Price Forecast Service.
 
-Wraps Google TimesFM 2.5 (200M) to predict future stock prices.
+Wraps Google TimesFM 1.0 (200M) to predict future stock prices.
 Lazy-loads the model on first call to avoid startup overhead.
 Gated behind ENABLE_FORECAST config flag (default: False).
 """
@@ -46,7 +46,7 @@ class ForecastResult:
 
 
 class ForecastService:
-    """TimesFM v2.5 200M price forecast service with lazy model loading."""
+    """TimesFM 1.0 200M price forecast service with lazy model loading."""
 
     def __init__(self):
         self._model = None
@@ -65,10 +65,10 @@ class ForecastService:
                     horizon_len=128,
                 ),
                 checkpoint=timesfm.TimesFmCheckpoint(
-                    huggingface_repo_id="google/timesfm-2.5-200m-pytorch",
+                    huggingface_repo_id="google/timesfm-1.0-200m-pytorch",
                 ),
             )
-            logger.info("TimesFM 2.5 200M model loaded successfully")
+            logger.info("TimesFM 1.0 200M model loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load TimesFM model: {e}")
             raise
@@ -113,7 +113,6 @@ class ForecastService:
             point_forecast, quantile_forecast = self._model.forecast(
                 [close_series],
                 freq=[0],  # 0 = daily
-                prediction_length=horizon_days,
             )
 
             predicted = point_forecast[0][:horizon_days].tolist()

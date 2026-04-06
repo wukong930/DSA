@@ -43,6 +43,7 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
         taskType: data.taskType,
         stockCodes: data.stockCodes,
         scheduleConfig: data.scheduleConfig,
+        analysisMode: data.analysisMode ?? 'traditional',
         isActive: true,
         lastRunAt: null,
         nextRunAt: new Date(Date.now() + 86400000).toISOString(),

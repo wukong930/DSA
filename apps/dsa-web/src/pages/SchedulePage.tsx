@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Calendar, Clock, Pause, Play, Plus, Repeat, Trash2, Zap } from 'lucide-react';
+import { Brain, Calendar, Clock, Pause, Play, Plus, Repeat, Trash2, Zap } from 'lucide-react';
 import { useSchedulerStore } from '../stores/schedulerStore';
 import { AppPage, Card, Badge, StatusDot, EmptyState, ApiErrorAlert, ConfirmDialog, PageHeader } from '../components/common';
 
@@ -30,6 +30,7 @@ const SchedulePage: React.FC = () => {
   const [hour, setHour] = useState('18');
   const [minute, setMinute] = useState('0');
   const [intervalMinutes, setIntervalMinutes] = useState('60');
+  const [analysisMode, setAnalysisMode] = useState('traditional');
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -47,12 +48,13 @@ const SchedulePage: React.FC = () => {
           ? { type: 'interval', interval_minutes: Number(intervalMinutes) }
           : { type: 'cron', hour: Number(hour), minute: Number(minute) };
 
-    const ok = await createTask({ taskType, stockCodes: codes, scheduleConfig: config });
+    const ok = await createTask({ taskType, stockCodes: codes, scheduleConfig: config, analysisMode });
     if (ok) {
       setShowForm(false);
       setStockCodesInput('');
+      setAnalysisMode('traditional');
     }
-  }, [stockCodesInput, taskType, scheduleType, hour, minute, intervalMinutes, createTask]);
+  }, [stockCodesInput, taskType, scheduleType, hour, minute, intervalMinutes, analysisMode, createTask]);
 
   const handleToggle = useCallback(
     (id: number, isActive: boolean) => void updateTask(id, { isActive: !isActive }),
@@ -245,6 +247,33 @@ const SchedulePage: React.FC = () => {
               </div>
             )}
 
+            <div>
+              <label className="mb-2 block text-sm font-medium text-foreground">分析模式</label>
+              <div className="flex gap-2">
+                {[
+                  { value: 'traditional', label: '传统分析', icon: <Zap className="h-3.5 w-3.5" />, desc: '快速，单次 AI 调用' },
+                  { value: 'agent', label: 'Agent 深度分析', icon: <Brain className="h-3.5 w-3.5" />, desc: '多 Agent 协作，更深入' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAnalysisMode(opt.value)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all ${
+                      analysisMode === opt.value
+                        ? 'border-cyan/40 bg-cyan/10 text-cyan'
+                        : 'border-border/60 text-secondary-text hover:border-border hover:text-foreground'
+                    }`}
+                  >
+                    {opt.icon}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-muted-text">
+                {analysisMode === 'agent' ? 'Agent 模式：5个专业 Agent 多步协作分析，耗时较长但更深入' : '传统模式：单次 AI 综合分析，速度快'}
+              </p>
+            </div>
+
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
@@ -298,6 +327,9 @@ const SchedulePage: React.FC = () => {
                     <Badge variant={task.isActive ? 'success' : 'default'} size="sm">
                       <StatusDot tone={task.isActive ? 'success' : 'neutral'} className="mr-0.5" />
                       {task.isActive ? '运行中' : '已暂停'}
+                    </Badge>
+                    <Badge variant={task.analysisMode === 'agent' ? 'warning' : 'info'} size="sm">
+                      {task.analysisMode === 'agent' ? 'Agent 模式' : '传统模式'}
                     </Badge>
                   </div>
 

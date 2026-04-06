@@ -40,6 +40,9 @@ COPY requirements.txt .
 # 安装 Python 依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 预下载 TimesFM 模型权重（确保初次启动即可用，约 800MB）
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('google/timesfm-2.5-200m-pytorch')"
+
 # 复制应用代码
 COPY *.py ./
 COPY api/ ./api/

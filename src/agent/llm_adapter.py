@@ -306,8 +306,8 @@ class LLMToolAdapter:
             "messages": openai_messages,
             "temperature": self._get_temperature(model) if temperature is None else temperature,
         }
-        if max_tokens is not None:
-            call_kwargs["max_tokens"] = max_tokens
+        effective_max_tokens = max_tokens if max_tokens is not None else 8192
+        call_kwargs["max_tokens"] = effective_max_tokens
         if timeout is not None:
             call_kwargs["timeout"] = timeout
 

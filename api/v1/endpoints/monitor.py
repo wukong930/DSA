@@ -132,7 +132,7 @@ async def alert_list(request: Request, unread_only: bool = False):
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
 
     service = _get_service()
-    alerts = service.get_user_alerts(user_id, unread_only=unread_only)
+    alerts = service.get_user_alerts(user_id)
     return {"alerts": alerts, "total": len(alerts)}
 
 

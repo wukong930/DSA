@@ -29,7 +29,7 @@ class ForecastResult:
     trend: str                             # "up" | "down" | "neutral"
     trend_pct: float                       # predicted % change over horizon
     last_close: float                      # last observed close price
-    model_version: str = "timesfm-2.5-200m"
+    model_version: str = "timesfm-1.3.0-200m"
 
     def to_dict(self) -> dict:
         return {

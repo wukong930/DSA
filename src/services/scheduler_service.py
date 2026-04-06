@@ -84,11 +84,12 @@ class SchedulerService:
         """Execute a scheduled task based on its type."""
         task_type = task["task_type"]
         stock_codes = task["stock_codes"]
+        analysis_mode = task.get("analysis_mode", "traditional")
 
         if task_type == "daily_analysis":
-            await self._run_daily_analysis(stock_codes, task)
+            await self._run_daily_analysis(stock_codes, task, analysis_mode)
         elif task_type == "custom_range":
-            await self._run_daily_analysis(stock_codes, task)
+            await self._run_daily_analysis(stock_codes, task, analysis_mode)
         elif task_type == "monitor":
             # Monitor tasks are handled by MonitorService
             pass
@@ -96,14 +97,14 @@ class SchedulerService:
         # Update last_run_at and compute next_run_at
         self._update_after_run(task["id"], task["schedule_config"])
 
-    async def _run_daily_analysis(self, stock_codes: list, task: dict):
+    async def _run_daily_analysis(self, stock_codes: list, task: dict, analysis_mode: str = "traditional"):
         """Run analysis for a list of stocks."""
         from src.core.pipeline import run_analysis_pipeline
 
         for code in stock_codes:
             try:
-                await asyncio.to_thread(run_analysis_pipeline, code)
-                logger.info("Scheduled analysis completed for %s (task %d)", code, task["id"])
+                await asyncio.to_thread(run_analysis_pipeline, code, analysis_mode=analysis_mode)
+                logger.info("Scheduled analysis completed for %s (task %d, mode=%s)", code, task["id"], analysis_mode)
             except Exception as e:
                 logger.warning("Scheduled analysis failed for %s: %s", code, e)
 
@@ -168,13 +169,15 @@ class SchedulerService:
             return [self._task_to_dict(t) for t in tasks]
 
     def create_task(self, user_id: int, task_type: str, stock_codes: list[str],
-                    schedule_config: dict) -> tuple[Optional[int], Optional[str]]:
+                    schedule_config: dict, analysis_mode: str = "traditional") -> tuple[Optional[int], Optional[str]]:
         from src.storage import ScheduledTask
 
         if task_type not in ("daily_analysis", "custom_range", "monitor"):
             return None, f"Invalid task_type: {task_type}"
         if not stock_codes:
             return None, "至少需要一个股票代码"
+        if analysis_mode not in ("traditional", "agent"):
+            return None, f"Invalid analysis_mode: {analysis_mode}"
 
         now = datetime.now()
         next_run = self._compute_next_run(schedule_config, now)
@@ -186,6 +189,7 @@ class SchedulerService:
                 task_type=task_type,
                 stock_codes=json.dumps(stock_codes, ensure_ascii=False),
                 schedule_config=json.dumps(schedule_config, ensure_ascii=False),
+                analysis_mode=analysis_mode,
                 next_run_at=next_run,
             )
             session.add(task)
@@ -194,7 +198,8 @@ class SchedulerService:
             return task.id, None
 
     def update_task(self, task_id: int, user_id: int, is_active: Optional[bool] = None,
-                    stock_codes: Optional[list] = None, schedule_config: Optional[dict] = None) -> Optional[str]:
+                    stock_codes: Optional[list] = None, schedule_config: Optional[dict] = None,
+                    analysis_mode: Optional[str] = None) -> Optional[str]:
         from src.storage import ScheduledTask
         db = _get_db()
         with db.get_session() as session:
@@ -210,6 +215,8 @@ class SchedulerService:
             if schedule_config is not None:
                 task.schedule_config = json.dumps(schedule_config, ensure_ascii=False)
                 task.next_run_at = self._compute_next_run(schedule_config, datetime.now())
+            if analysis_mode is not None:
+                task.analysis_mode = analysis_mode
             session.commit()
             return None
 
@@ -246,6 +253,7 @@ class SchedulerService:
             "task_type": t.task_type,
             "stock_codes": stock_codes,
             "schedule_config": schedule_config,
+            "analysis_mode": getattr(t, 'analysis_mode', 'traditional') or 'traditional',
             "is_active": t.is_active,
             "last_run_at": t.last_run_at.isoformat() if t.last_run_at else None,
             "next_run_at": t.next_run_at.isoformat() if t.next_run_at else None,

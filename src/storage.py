@@ -696,6 +696,7 @@ class ScheduledTask(Base):
     stock_codes = Column(Text, nullable=False, default='[]')  # JSON array
     schedule_config = Column(Text, nullable=False, default='{}')  # JSON: cron, start_time, end_time, interval
     is_active = Column(Boolean, nullable=False, default=True)
+    analysis_mode = Column(String(16), nullable=False, default='traditional')  # traditional / agent
     last_run_at = Column(DateTime, nullable=True)
     next_run_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
@@ -779,12 +780,30 @@ class DatabaseManager:
         # 创建所有表
         Base.metadata.create_all(self._engine)
 
+        # 轻量迁移：为已有表补充新列
+        self._apply_migrations()
+
         self._initialized = True
         logger.info(f"数据库初始化完成: {db_url}")
 
         # 注册退出钩子，确保程序退出时关闭数据库连接
         atexit.register(DatabaseManager._cleanup_engine, self._engine)
-    
+
+    def _apply_migrations(self):
+        """Add missing columns to existing tables."""
+        from sqlalchemy import inspect as sa_inspect, text
+        inspector = sa_inspect(self._engine)
+        migrations = [
+            ('scheduled_tasks', 'analysis_mode', "VARCHAR(16) NOT NULL DEFAULT 'traditional'"),
+        ]
+        for table, column, col_def in migrations:
+            if table in inspector.get_table_names():
+                existing = [c['name'] for c in inspector.get_columns(table)]
+                if column not in existing:
+                    with self._engine.begin() as conn:
+                        conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_def}'))
+                    logger.info("Migration: added %s.%s", table, column)
+
     @classmethod
     def get_instance(cls) -> 'DatabaseManager':
         """获取单例实例"""

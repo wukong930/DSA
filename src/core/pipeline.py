@@ -313,20 +313,7 @@ class StockAnalysisPipeline:
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 趋势分析失败: {e}", exc_info=True)
 
-            if use_agent:
-                logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
-                return self._analyze_with_agent(
-                    code,
-                    report_type,
-                    query_id,
-                    stock_name,
-                    realtime_quote,
-                    chip_data,
-                    fundamental_context,
-                    trend_result,
-                )
-
-            # Step 3.5: 时序预测（可选，TimesFM）
+            # Step 3.5: 时序预测（可选，TimesFM）— 在 Agent 分支之前执行，供两条路径共用
             forecast_result = None
             if self.forecast_service is not None:
                 try:
@@ -343,6 +330,20 @@ class StockAnalysisPipeline:
                         logger.info(f"{stock_name}({code}) 历史数据不足，跳过时序预测")
                 except Exception as e:
                     logger.warning(f"{stock_name}({code}) 时序预测失败: {e}")
+
+            if use_agent:
+                logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
+                return self._analyze_with_agent(
+                    code,
+                    report_type,
+                    query_id,
+                    stock_name,
+                    realtime_quote,
+                    chip_data,
+                    fundamental_context,
+                    trend_result,
+                    forecast_result,
+                )
 
             # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
             news_context = None
@@ -687,15 +688,16 @@ class StockAnalysisPipeline:
         return enriched_context
 
     def _analyze_with_agent(
-        self, 
-        code: str, 
-        report_type: ReportType, 
+        self,
+        code: str,
+        report_type: ReportType,
         query_id: str,
         stock_name: str,
         realtime_quote: Any,
         chip_data: Optional[ChipDistribution],
         fundamental_context: Optional[Dict[str, Any]] = None,
         trend_result: Optional[TrendAnalysisResult] = None,
+        forecast_result=None,
     ) -> Optional[AnalysisResult]:
         """
         使用 Agent 模式分析单只股票。
@@ -722,6 +724,8 @@ class StockAnalysisPipeline:
                 initial_context["chip_distribution"] = self._safe_to_dict(chip_data)
             if trend_result:
                 initial_context["trend_result"] = self._safe_to_dict(trend_result)
+            if forecast_result:
+                initial_context["forecast"] = forecast_result.to_dict()
 
             # Agent path: inject social sentiment as news_context so both
             # executor (_build_user_message) and orchestrator (ctx.set_data)
@@ -1566,3 +1570,27 @@ class StockAnalysisPipeline:
         if report_type == ReportType.BRIEF and hasattr(self.notifier, "generate_brief_report"):
             return self.notifier.generate_brief_report(results)
         return self.notifier.generate_dashboard_report(results)
+
+
+def run_analysis_pipeline(code: str, analysis_mode: str = "traditional") -> Optional[AnalysisResult]:
+    """Convenience entry point for scheduled tasks.
+
+    Args:
+        code: Stock code to analyze.
+        analysis_mode: 'traditional' or 'agent'.
+
+    Returns:
+        AnalysisResult or None.
+    """
+    config = get_config()
+    # Override agent_mode based on per-task analysis_mode
+    if analysis_mode == "agent":
+        config.agent_mode = True
+        config._agent_mode_explicit = True
+    else:
+        config.agent_mode = False
+        config._agent_mode_explicit = True
+
+    pipeline = StockAnalysisPipeline(config=config)
+    results = pipeline.run(stock_codes=[code], send_notification=False)
+    return results[0] if results else None

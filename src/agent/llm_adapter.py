@@ -257,6 +257,16 @@ class LLMToolAdapter:
         models_to_try = get_effective_agent_models_to_try(config)
         started_at = time.time()
 
+        # Apply per-call default timeout when caller doesn't specify one
+        default_call_timeout = getattr(config, "agent_llm_call_timeout_s", 60)
+        if default_call_timeout and default_call_timeout > 0:
+            cap = float(default_call_timeout)
+            if timeout is None:
+                timeout = cap
+            else:
+                # Caller passed a wall-clock budget; cap each call so one stuck request can't eat it all
+                timeout = min(float(timeout), cap)
+
         last_error = None
         for model in models_to_try:
             remaining_timeout = timeout

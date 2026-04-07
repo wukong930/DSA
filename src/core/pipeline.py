@@ -727,6 +727,24 @@ class StockAnalysisPipeline:
             if forecast_result:
                 initial_context["forecast"] = forecast_result.to_dict()
 
+            # Pre-compute 43 technical indicators so the agent doesn't need
+            # to call get_technical_indicators tool (saves 1-3 ReAct rounds)
+            try:
+                from src.services.ta_indicator_service import TAIndicatorService
+                ta_df = self.db.get_daily_data(code, limit=90)
+                if ta_df is not None and len(ta_df) >= 20:
+                    ta_service = TAIndicatorService()
+                    result_df = ta_service.compute_all(ta_df)
+                    initial_context["technical_indicators"] = {
+                        "stock_code": code,
+                        "data_points": len(result_df),
+                        "indicators": ta_service.get_summary(result_df),
+                        "signals": ta_service.get_signals(result_df),
+                    }
+                    logger.info(f"{stock_name}({code}) 技术指标预计算完成（{len(result_df)} 数据点）")
+            except Exception as e:
+                logger.warning(f"[{code}] 技术指标预计算失败（agent 仍可通过 tool 调用）: {e}")
+
             # Agent path: inject social sentiment as news_context so both
             # executor (_build_user_message) and orchestrator (ctx.set_data)
             # can consume it through the existing news_context channel

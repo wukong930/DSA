@@ -521,6 +521,7 @@ class Config:
     agent_arch: str = "single"     # Agent architecture: 'single' (legacy) or 'multi' (orchestrator)
     agent_orchestrator_mode: str = "standard"  # Orchestrator mode: quick/standard/full/specialist
     agent_orchestrator_timeout_s: int = 600  # Cooperative timeout budget for the whole multi-agent pipeline
+    agent_llm_call_timeout_s: int = 60  # Per-call LLM timeout (seconds); prevents a single stuck API call from blocking the pipeline
     agent_risk_override: bool = True  # Allow risk agent to veto buy signals
     agent_deep_research_budget: int = 30000  # Max token budget for deep research
     agent_deep_research_timeout: int = 180  # Max seconds for /research command before returning timeout
@@ -1144,6 +1145,12 @@ class Config:
                 600,
                 field_name='AGENT_ORCHESTRATOR_TIMEOUT_S',
                 minimum=0,
+            ),
+            agent_llm_call_timeout_s=parse_env_int(
+                os.getenv('AGENT_LLM_CALL_TIMEOUT_S'),
+                60,
+                field_name='AGENT_LLM_CALL_TIMEOUT_S',
+                minimum=10,
             ),
             agent_risk_override=os.getenv('AGENT_RISK_OVERRIDE', 'true').lower() == 'true',
             agent_deep_research_budget=parse_env_int(

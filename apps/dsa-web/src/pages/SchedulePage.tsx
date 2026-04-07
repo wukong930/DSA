@@ -24,6 +24,7 @@ const SchedulePage: React.FC = () => {
   const { tasks, loading, error, fetchTasks, createTask, updateTask, deleteTask } = useSchedulerStore();
 
   const [showForm, setShowForm] = useState(false);
+  const [taskName, setTaskName] = useState('');
   const [taskType, setTaskType] = useState('daily_analysis');
   const [stockCodesInput, setStockCodesInput] = useState('');
   const [scheduleType, setScheduleType] = useState('daily');
@@ -48,13 +49,14 @@ const SchedulePage: React.FC = () => {
           ? { type: 'interval', interval_minutes: Number(intervalMinutes) }
           : { type: 'cron', hour: Number(hour), minute: Number(minute) };
 
-    const ok = await createTask({ taskType, stockCodes: codes, scheduleConfig: config, analysisMode });
+    const ok = await createTask({ taskType, stockCodes: codes, scheduleConfig: config, analysisMode, name: taskName || undefined });
     if (ok) {
       setShowForm(false);
+      setTaskName('');
       setStockCodesInput('');
       setAnalysisMode('traditional');
     }
-  }, [stockCodesInput, taskType, scheduleType, hour, minute, intervalMinutes, analysisMode, createTask]);
+  }, [stockCodesInput, taskType, scheduleType, hour, minute, intervalMinutes, analysisMode, taskName, createTask]);
 
   const handleToggle = useCallback(
     (id: number, isActive: boolean) => void updateTask(id, { isActive: !isActive }),
@@ -152,6 +154,17 @@ const SchedulePage: React.FC = () => {
         <Card className="mb-6 border border-cyan/20" padding="lg">
           <h3 className="mb-4 text-base font-semibold text-foreground">新建定时任务</h3>
           <div className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-foreground">任务名称</label>
+              <input
+                type="text"
+                value={taskName}
+                onChange={(e) => setTaskName(e.target.value)}
+                placeholder="可选，如 白酒组合每日追踪"
+                maxLength={128}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-text focus:border-cyan focus:outline-none"
+              />
+            </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-foreground">任务类型</label>
               <div className="flex gap-2">
@@ -322,7 +335,7 @@ const SchedulePage: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-base font-semibold text-foreground">
-                      {TASK_TYPE_LABELS[task.taskType] || task.taskType}
+                      {task.name || TASK_TYPE_LABELS[task.taskType] || task.taskType}
                     </span>
                     <Badge variant={task.isActive ? 'success' : 'default'} size="sm">
                       <StatusDot tone={task.isActive ? 'success' : 'neutral'} className="mr-0.5" />

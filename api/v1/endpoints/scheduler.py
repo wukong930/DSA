@@ -36,6 +36,7 @@ class CreateScheduleRequest(BaseModel):
     stock_codes: list[str] = Field(alias="stockCodes")
     schedule_config: dict = Field(default_factory=dict, alias="scheduleConfig")
     analysis_mode: str = Field(default="traditional", alias="analysisMode")  # traditional / agent
+    name: str | None = Field(default=None)
 
 
 class UpdateScheduleRequest(BaseModel):
@@ -45,6 +46,7 @@ class UpdateScheduleRequest(BaseModel):
     stock_codes: list[str] | None = Field(default=None, alias="stockCodes")
     schedule_config: dict | None = Field(default=None, alias="scheduleConfig")
     analysis_mode: str | None = Field(default=None, alias="analysisMode")
+    name: str | None = Field(default=None)
 
 
 @router.get("", summary="List user's scheduled tasks")
@@ -70,6 +72,7 @@ async def schedule_create(request: Request, body: CreateScheduleRequest):
         stock_codes=body.stock_codes,
         schedule_config=body.schedule_config,
         analysis_mode=body.analysis_mode,
+        name=body.name,
     )
     if err:
         return JSONResponse(status_code=400, content={"error": "create_failed", "message": err})
@@ -90,6 +93,7 @@ async def schedule_update(request: Request, task_id: int, body: UpdateScheduleRe
         stock_codes=body.stock_codes,
         schedule_config=body.schedule_config,
         analysis_mode=body.analysis_mode,
+        name=body.name,
     )
     if err:
         return JSONResponse(status_code=400, content={"error": "update_failed", "message": err})

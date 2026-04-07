@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.13.0] - 2026-04-07
+
+### 新功能
+
+- 🧠 **Bull/Bear 正反论证** — DecisionAgent 在出结论前强制列出 ≥3 个看多和 ≥3 个看空理由并显式权衡，减少确认偏误；Dashboard JSON 新增 `bull_bear_debate` 字段（含 bull_arguments / bear_arguments / verdict）。
+- 📝 **定时任务自定义名称** — 创建/编辑定时任务时支持填写自定义名称（可选），任务列表优先显示名称，无名称时 fallback 到任务类型标签。
+
+### 改进
+
+- 🎯 **LLM 单次调用超时保护** — 新增 `AGENT_LLM_CALL_TIMEOUT_S`（默认 60s），防止单次 API 卡死吃掉整个 Agent 超时预算。
+- ⚡ **技术指标预计算** — 43 项技术指标在 Agent 模式下预计算并注入上下文，减少 1-3 轮 ReAct 工具调用。
+
 ## [3.12.0] - 2026-04-06
 
 ### 发布亮点

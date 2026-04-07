@@ -5,6 +5,7 @@ export interface ScheduledTask {
   id: number;
   userId: number;
   taskType: string;
+  name: string | null;
   stockCodes: string[];
   scheduleConfig: Record<string, unknown>;
   analysisMode: string;
@@ -25,25 +26,28 @@ export const schedulerApi = {
     stockCodes: string[];
     scheduleConfig: Record<string, unknown>;
     analysisMode?: string;
+    name?: string;
   }): Promise<{ id: number; message: string }> => {
     const res = await apiClient.post<Record<string, unknown>>('/api/v1/scheduler', {
       task_type: data.taskType,
       stock_codes: data.stockCodes,
       schedule_config: data.scheduleConfig,
       analysis_mode: data.analysisMode ?? 'traditional',
+      name: data.name,
     });
     return toCamelCase(res.data);
   },
 
   update: async (
     taskId: number,
-    data: { isActive?: boolean; stockCodes?: string[]; scheduleConfig?: Record<string, unknown>; analysisMode?: string },
+    data: { isActive?: boolean; stockCodes?: string[]; scheduleConfig?: Record<string, unknown>; analysisMode?: string; name?: string },
   ): Promise<{ message: string }> => {
     const res = await apiClient.put<Record<string, unknown>>(`/api/v1/scheduler/${taskId}`, {
       is_active: data.isActive,
       stock_codes: data.stockCodes,
       schedule_config: data.scheduleConfig,
       analysis_mode: data.analysisMode,
+      name: data.name,
     });
     return toCamelCase(res.data);
   },

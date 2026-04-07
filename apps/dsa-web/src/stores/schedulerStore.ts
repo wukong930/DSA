@@ -41,6 +41,7 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
         id: Math.max(0, ...get().tasks.map((t) => t.id)) + 1,
         userId: 0,
         taskType: data.taskType,
+        name: data.name ?? null,
         stockCodes: data.stockCodes,
         scheduleConfig: data.scheduleConfig,
         analysisMode: data.analysisMode ?? 'traditional',

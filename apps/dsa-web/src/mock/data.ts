@@ -240,7 +240,7 @@ export const MOCK_FILTER_RESULTS: FilterResult[] = [
 
 export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
   {
-    id: 1, userId: 0, taskType: 'daily_analysis',
+    id: 1, userId: 0, taskType: 'daily_analysis', name: '白酒组合每日追踪',
     stockCodes: ['600519', '000858', '300750'],
     scheduleConfig: { type: 'daily', time: '08:30', timezone: 'Asia/Shanghai' },
     analysisMode: 'traditional',
@@ -250,7 +250,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     createdAt: '2026-02-01T10:00:00',
   },
   {
-    id: 2, userId: 0, taskType: 'daily_analysis',
+    id: 2, userId: 0, taskType: 'daily_analysis', name: '美股科技龙头',
     stockCodes: ['AAPL', 'NVDA'],
     scheduleConfig: { type: 'daily', time: '22:00', timezone: 'America/New_York' },
     analysisMode: 'traditional',
@@ -260,7 +260,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     createdAt: '2026-03-01T20:00:00',
   },
   {
-    id: 3, userId: 0, taskType: 'daily_analysis',
+    id: 3, userId: 0, taskType: 'daily_analysis', name: null,
     stockCodes: ['hk00700', 'hk09988'],
     scheduleConfig: { type: 'workday', time: '09:00', timezone: 'Asia/Hong_Kong' },
     analysisMode: 'agent',
@@ -270,7 +270,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     createdAt: '2026-03-10T11:00:00',
   },
   {
-    id: 4, userId: 0, taskType: 'daily_analysis',
+    id: 4, userId: 0, taskType: 'daily_analysis', name: null,
     stockCodes: ['002594', '601318', '000001'],
     scheduleConfig: { type: 'interval', intervalMinutes: 120 },
     analysisMode: 'traditional',

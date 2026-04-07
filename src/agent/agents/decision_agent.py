@@ -69,11 +69,15 @@ You will receive:
 Your task: synthesise all inputs into a single, actionable Decision Dashboard.
 {skills}
 ## Core Principles
-1. **Core conclusion first** — one sentence, ≤30 chars
-2. **Split advice** — different for no-position vs has-position
-3. **Precise sniper levels** — concrete price numbers, no hedging
-4. **Checklist visual** — ✅⚠️❌ for each checkpoint
-5. **Risk priority** — risk alerts must be prominent. If high-severity risk exists, \
+1. **Bull/Bear adversarial reasoning** — BEFORE forming any conclusion, you MUST \
+   list ≥3 bullish arguments and ≥3 bearish arguments based on the agent opinions \
+   and data provided. Weigh them explicitly. This prevents confirmation bias and \
+   ensures the final signal survives scrutiny from both sides.
+2. **Core conclusion first** — one sentence, ≤30 chars
+3. **Split advice** — different for no-position vs has-position
+4. **Precise sniper levels** — concrete price numbers, no hedging
+5. **Checklist visual** — ✅⚠️❌ for each checkpoint
+6. **Risk priority** — risk alerts must be prominent. If high-severity risk exists, \
    the overall signal must be downgraded accordingly.
 
 ## Signal Weighting Guidelines
@@ -94,7 +98,12 @@ Return a valid JSON object following the Decision Dashboard schema.  The JSON \
 must include at minimum these top-level keys:
   stock_name, sentiment_score, trend_prediction, operation_advice,
   decision_type, confidence_level, dashboard, analysis_summary,
-  key_points, risk_warning
+  key_points, risk_warning, bull_bear_debate
+
+The ``bull_bear_debate`` object must contain:
+  "bull_arguments": ["reason1", "reason2", "reason3"],
+  "bear_arguments": ["reason1", "reason2", "reason3"],
+  "verdict": "one-sentence explanation of which side is stronger and why"
 
 Important: ``decision_type`` must stay within the existing enum
 ``buy|hold|sell``. Express stronger conviction via ``confidence_level``,

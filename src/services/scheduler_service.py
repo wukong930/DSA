@@ -182,7 +182,8 @@ class SchedulerService:
             return [self._task_to_dict(t) for t in tasks]
 
     def create_task(self, user_id: int, task_type: str, stock_codes: list[str],
-                    schedule_config: dict, analysis_mode: str = "traditional") -> tuple[Optional[int], Optional[str]]:
+                    schedule_config: dict, analysis_mode: str = "traditional",
+                    name: Optional[str] = None) -> tuple[Optional[int], Optional[str]]:
         from src.storage import ScheduledTask
 
         if task_type not in ("daily_analysis", "custom_range", "monitor"):
@@ -200,6 +201,7 @@ class SchedulerService:
             task = ScheduledTask(
                 user_id=user_id,
                 task_type=task_type,
+                name=name,
                 stock_codes=json.dumps(stock_codes, ensure_ascii=False),
                 schedule_config=json.dumps(schedule_config, ensure_ascii=False),
                 analysis_mode=analysis_mode,
@@ -212,7 +214,7 @@ class SchedulerService:
 
     def update_task(self, task_id: int, user_id: int, is_active: Optional[bool] = None,
                     stock_codes: Optional[list] = None, schedule_config: Optional[dict] = None,
-                    analysis_mode: Optional[str] = None) -> Optional[str]:
+                    analysis_mode: Optional[str] = None, name: Optional[str] = None) -> Optional[str]:
         from src.storage import ScheduledTask
         db = _get_db()
         with db.get_session() as session:
@@ -230,6 +232,8 @@ class SchedulerService:
                 task.next_run_at = self._compute_next_run(schedule_config, datetime.now())
             if analysis_mode is not None:
                 task.analysis_mode = analysis_mode
+            if name is not None:
+                task.name = name
             session.commit()
             return None
 
@@ -264,6 +268,7 @@ class SchedulerService:
             "id": t.id,
             "user_id": t.user_id,
             "task_type": t.task_type,
+            "name": getattr(t, 'name', None),
             "stock_codes": stock_codes,
             "schedule_config": schedule_config,
             "analysis_mode": getattr(t, 'analysis_mode', 'traditional') or 'traditional',

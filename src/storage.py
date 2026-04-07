@@ -693,6 +693,7 @@ class ScheduledTask(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     task_type = Column(String(32), nullable=False, default='daily_analysis')  # daily_analysis / custom_range / monitor
+    name = Column(String(128), nullable=True, default=None)  # user-defined task name
     stock_codes = Column(Text, nullable=False, default='[]')  # JSON array
     schedule_config = Column(Text, nullable=False, default='{}')  # JSON: cron, start_time, end_time, interval
     is_active = Column(Boolean, nullable=False, default=True)
@@ -795,6 +796,7 @@ class DatabaseManager:
         inspector = sa_inspect(self._engine)
         migrations = [
             ('scheduled_tasks', 'analysis_mode', "VARCHAR(16) NOT NULL DEFAULT 'traditional'"),
+            ('scheduled_tasks', 'name', "VARCHAR(128) DEFAULT NULL"),
         ]
         for table, column, col_def in migrations:
             if table in inspector.get_table_names():

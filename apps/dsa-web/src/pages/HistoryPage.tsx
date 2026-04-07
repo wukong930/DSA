@@ -1,10 +1,10 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { ApiErrorAlert, Button, ConfirmDialog, EmptyState } from '../components/common';
 import { DashboardStateBlock } from '../components/dashboard';
-import { HistoryList } from '../components/history';
+import { HistoryGroupList } from '../components/history';
 import { ReportMarkdown, ReportSummary } from '../components/report';
 import { useHistoryPageStore } from '../stores/historyPageStore';
 import { normalizeReportLanguage, getReportText } from '../utils/reportLanguage';
@@ -16,10 +16,6 @@ const HistoryPage: React.FC = () => {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const {
-    historyItems,
-    isLoadingHistory,
-    isLoadingMore,
-    hasMore,
     error,
     selectedHistoryIds,
     isDeletingHistory,
@@ -27,10 +23,6 @@ const HistoryPage: React.FC = () => {
     isLoadingReport,
     markdownDrawerOpen,
     loadInitialHistory,
-    loadMoreHistory,
-    selectHistoryItem,
-    toggleHistorySelection,
-    toggleSelectAllVisible,
     deleteSelectedHistory,
     setFilterStockCode,
     openMarkdownDrawer,
@@ -38,10 +30,6 @@ const HistoryPage: React.FC = () => {
     clearError,
   } = useHistoryPageStore(
     useShallow((state) => ({
-      historyItems: state.historyItems,
-      isLoadingHistory: state.isLoadingHistory,
-      isLoadingMore: state.isLoadingMore,
-      hasMore: state.hasMore,
       error: state.error,
       selectedHistoryIds: state.selectedHistoryIds,
       isDeletingHistory: state.isDeletingHistory,
@@ -49,10 +37,6 @@ const HistoryPage: React.FC = () => {
       isLoadingReport: state.isLoadingReport,
       markdownDrawerOpen: state.markdownDrawerOpen,
       loadInitialHistory: state.loadInitialHistory,
-      loadMoreHistory: state.loadMoreHistory,
-      selectHistoryItem: state.selectHistoryItem,
-      toggleHistorySelection: state.toggleHistorySelection,
-      toggleSelectAllVisible: state.toggleSelectAllVisible,
       deleteSelectedHistory: state.deleteSelectedHistory,
       setFilterStockCode: state.setFilterStockCode,
       openMarkdownDrawer: state.openMarkdownDrawer,
@@ -77,72 +61,43 @@ const HistoryPage: React.FC = () => {
     [setFilterStockCode],
   );
 
-  const handleItemClick = useCallback(
-    (recordId: number) => {
-      void selectHistoryItem(recordId);
-      setSidebarOpen(false);
-    },
-    [selectHistoryItem],
-  );
-
   const handleDeleteSelected = useCallback(() => {
     void deleteSelectedHistory();
     setShowDeleteConfirm(false);
   }, [deleteSelectedHistory]);
 
-  const selectedIds = useMemo(
-    () => new Set(selectedHistoryIds),
-    [selectedHistoryIds],
-  );
-
   const reportLanguage = normalizeReportLanguage(selectedReport?.meta.reportLanguage);
   const reportText = getReportText(reportLanguage);
 
-  const sidebarContent = useMemo(
-    () => (
-      <div className="flex min-h-0 h-full flex-col gap-3 overflow-hidden">
-        <div className="relative flex-shrink-0">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-text" />
-          <input
-            type="text"
-            value={filterInput}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            placeholder="按股票代码筛选..."
-            className="input-surface input-focus-glow h-10 w-full rounded-xl border bg-transparent pl-9 pr-3 text-sm transition-all focus:outline-none"
-          />
-        </div>
-        <HistoryList
-          items={historyItems}
-          isLoading={isLoadingHistory}
-          isLoadingMore={isLoadingMore}
-          hasMore={hasMore}
-          selectedId={selectedReport?.meta.id}
-          selectedIds={selectedIds}
-          isDeleting={isDeletingHistory}
-          onItemClick={handleItemClick}
-          onLoadMore={() => void loadMoreHistory()}
-          onToggleItemSelection={toggleHistorySelection}
-          onToggleSelectAll={toggleSelectAllVisible}
-          onDeleteSelected={() => setShowDeleteConfirm(true)}
-          className="flex-1 overflow-hidden"
+  const sidebarContent = (
+    <div className="flex min-h-0 h-full flex-col gap-3 overflow-hidden">
+      <div className="relative flex-shrink-0">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-text" />
+        <input
+          type="text"
+          value={filterInput}
+          onChange={(e) => handleFilterChange(e.target.value)}
+          placeholder="按股票代码筛选..."
+          className="input-surface input-focus-glow h-10 w-full rounded-xl border bg-transparent pl-9 pr-3 text-sm transition-all focus:outline-none"
         />
       </div>
-    ),
-    [
-      filterInput,
-      handleFilterChange,
-      handleItemClick,
-      hasMore,
-      historyItems,
-      isDeletingHistory,
-      isLoadingHistory,
-      isLoadingMore,
-      loadMoreHistory,
-      selectedIds,
-      selectedReport?.meta.id,
-      toggleHistorySelection,
-      toggleSelectAllVisible,
-    ],
+      <div className="flex-1 overflow-y-auto">
+        <HistoryGroupList />
+      </div>
+      {selectedHistoryIds.length > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 border-t border-subtle-hover">
+          <span className="text-xs text-muted-text">已选 {selectedHistoryIds.length} 条</span>
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isDeletingHistory}
+          >
+            删除
+          </Button>
+        </div>
+      )}
+    </div>
   );
 
   return (

@@ -210,3 +210,22 @@ class MarkdownReportResponse(BaseModel):
                 "content": "# 📊 贵州茅台 (600519) 分析报告\n\n> 分析日期：**2024-01-01**\n\n..."
             }
         }
+
+
+class HistoryGroupItem(BaseModel):
+    """按股票分组的历史记录摘要"""
+
+    stock_code: str = Field(..., description="股票代码")
+    stock_name: Optional[str] = Field(None, description="股票名称")
+    record_count: int = Field(..., description="该股票的历史记录总数")
+    latest_id: int = Field(..., description="最新一条记录的 ID")
+    latest_sentiment_score: Optional[int] = Field(None, description="最新评分")
+    latest_operation_advice: Optional[str] = Field(None, description="最新操作建议")
+    latest_created_at: Optional[str] = Field(None, description="最新记录时间")
+
+
+class HistoryGroupedResponse(BaseModel):
+    """按股票分组的历史记录响应"""
+
+    groups: List[HistoryGroupItem] = Field(default_factory=list, description="分组列表")
+    total_groups: int = Field(..., description="分组总数")

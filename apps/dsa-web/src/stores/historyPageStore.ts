@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
 import { historyApi } from '../api/history';
-import type { AnalysisReport, HistoryItem, HistoryListResponse } from '../types/analysis';
+import type { AnalysisReport, HistoryItem, HistoryListResponse, HistoryGroupItem } from '../types/analysis';
 import { USE_MOCK, MOCK_HISTORY_ITEMS, MOCK_REPORT_MAOTAI } from '../mock/data';
 
 const PAGE_SIZE = 20;
@@ -24,6 +24,13 @@ export interface HistoryPageState {
   isLoadingReport: boolean;
   markdownDrawerOpen: boolean;
 
+  // Grouped view state
+  groups: HistoryGroupItem[];
+  expandedGroups: Set<string>;
+  groupSubItems: Record<string, HistoryItem[]>;
+  isLoadingGroups: boolean;
+  isLoadingGroupItems: Record<string, boolean>;
+
   setFilterStockCode: (code: string) => void;
   loadInitialHistory: () => Promise<void>;
   loadMoreHistory: () => Promise<void>;
@@ -34,6 +41,10 @@ export interface HistoryPageState {
   openMarkdownDrawer: () => void;
   closeMarkdownDrawer: () => void;
   clearError: () => void;
+
+  // Grouped view actions
+  loadGroups: () => Promise<void>;
+  toggleGroup: (stockCode: string) => Promise<void>;
 }
 
 async function fetchHistory(
@@ -107,9 +118,16 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
   isLoadingReport: false,
   markdownDrawerOpen: false,
 
+  // Grouped view state
+  groups: [],
+  expandedGroups: new Set<string>(),
+  groupSubItems: {},
+  isLoadingGroups: false,
+  isLoadingGroupItems: {},
+
   setFilterStockCode: (code) => {
     set({ filterStockCode: code });
-    void fetchHistory(get, set, { reset: true, autoSelectFirst: false });
+    void get().loadGroups();
   },
 
   loadInitialHistory: async () => {
@@ -123,7 +141,7 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
       });
       return;
     }
-    await fetchHistory(get, set, { reset: true, autoSelectFirst: true });
+    await get().loadGroups();
   },
 
   loadMoreHistory: async () => {
@@ -201,12 +219,13 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
 
       set({ selectedHistoryIds: [] });
 
-      const freshPage = await fetchHistory(get, set, { reset: true });
+      // Reload groups after deletion
+      await get().loadGroups();
 
       if (selectedWasDeleted) {
-        const nextItem = freshPage?.items?.[0];
-        if (nextItem) {
-          await get().selectHistoryItem(nextItem.id);
+        const groups = get().groups;
+        if (groups.length > 0) {
+          await get().selectHistoryItem(groups[0].latestId);
         } else {
           set({ selectedReport: null });
         }
@@ -221,4 +240,59 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
   openMarkdownDrawer: () => set({ markdownDrawerOpen: true }),
   closeMarkdownDrawer: () => set({ markdownDrawerOpen: false }),
   clearError: () => set({ error: null }),
+
+  // Grouped view actions
+  loadGroups: async () => {
+    set({ isLoadingGroups: true });
+    try {
+      const code = get().filterStockCode.trim();
+      const response = await historyApi.getGrouped(code || undefined);
+      set({
+        groups: response.groups,
+        groupSubItems: {},
+        expandedGroups: new Set<string>(),
+      });
+
+      // Auto-select first group's latest report
+      if (response.groups.length > 0 && !get().selectedReport) {
+        await get().selectHistoryItem(response.groups[0].latestId);
+      }
+    } catch (error) {
+      set({ error: getParsedApiError(error) });
+    } finally {
+      set({ isLoadingGroups: false });
+    }
+  },
+
+  toggleGroup: async (stockCode: string) => {
+    const expanded = new Set(get().expandedGroups);
+
+    if (expanded.has(stockCode)) {
+      expanded.delete(stockCode);
+      set({ expandedGroups: expanded });
+      return;
+    }
+
+    expanded.add(stockCode);
+    set({ expandedGroups: expanded });
+
+    // Load sub-items if not cached
+    if (!get().groupSubItems[stockCode]) {
+      set({
+        isLoadingGroupItems: { ...get().isLoadingGroupItems, [stockCode]: true },
+      });
+      try {
+        const response = await historyApi.getList({ stockCode, page: 1, limit: 100 });
+        set({
+          groupSubItems: { ...get().groupSubItems, [stockCode]: response.items },
+        });
+      } catch (error) {
+        set({ error: getParsedApiError(error) });
+      } finally {
+        set({
+          isLoadingGroupItems: { ...get().isLoadingGroupItems, [stockCode]: false },
+        });
+      }
+    }
+  },
 }));

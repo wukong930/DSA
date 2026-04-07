@@ -234,6 +234,23 @@ export interface HistoryPagination {
   limit: number;
 }
 
+/** History group item (one per stock) */
+export interface HistoryGroupItem {
+  stockCode: string;
+  stockName?: string;
+  recordCount: number;
+  latestId: number;
+  latestSentimentScore?: number;
+  latestOperationAdvice?: string;
+  latestCreatedAt?: string;
+}
+
+/** Grouped history response */
+export interface HistoryGroupedResponse {
+  groups: HistoryGroupItem[];
+  totalGroups: number;
+}
+
 // ============ Error Types ============
 
 export interface ApiError {

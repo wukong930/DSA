@@ -28,6 +28,8 @@ from api.v1.schemas.history import (
     ReportStrategy,
     ReportDetails,
     MarkdownReportResponse,
+    HistoryGroupItem,
+    HistoryGroupedResponse,
 )
 from api.v1.schemas.common import ErrorResponse
 from src.storage import DatabaseManager
@@ -126,6 +128,53 @@ def get_history_list(
                 "error": "internal_error",
                 "message": f"查询历史列表失败: {str(e)}"
             }
+        )
+
+
+@router.get(
+    "/grouped",
+    response_model=HistoryGroupedResponse,
+    responses={
+        200: {"description": "按股票分组的历史记录"},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取按股票分组的历史记录",
+    description="按股票代码分组，每组返回最新一条记录的摘要和该股票的总记录数",
+)
+def get_grouped_history(
+    stock_code: Optional[str] = Query(None, description="股票代码筛选"),
+    db_manager: DatabaseManager = Depends(get_database_manager),
+) -> HistoryGroupedResponse:
+    try:
+        service = HistoryService(db_manager)
+        result = service.get_grouped_history(stock_code=stock_code)
+
+        groups = [
+            HistoryGroupItem(
+                stock_code=g["stock_code"],
+                stock_name=g.get("stock_name"),
+                record_count=g["record_count"],
+                latest_id=g["latest_id"],
+                latest_sentiment_score=g.get("latest_sentiment_score"),
+                latest_operation_advice=g.get("latest_operation_advice"),
+                latest_created_at=g.get("latest_created_at"),
+            )
+            for g in result.get("groups", [])
+        ]
+
+        return HistoryGroupedResponse(
+            groups=groups,
+            total_groups=result.get("total_groups", 0),
+        )
+
+    except Exception as e:
+        logger.error(f"查询分组历史失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": f"查询分组历史失败: {str(e)}",
+            },
         )
 
 

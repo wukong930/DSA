@@ -134,6 +134,80 @@ class HistoryService:
             logger.error(f"查询历史列表失败: {e}", exc_info=True)
             return {"total": 0, "items": []}
 
+    def get_grouped_history(
+        self,
+        stock_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get history records grouped by stock code.
+
+        Returns the latest record summary per stock, sorted by latest created_at desc.
+
+        Args:
+            stock_code: Optional stock code filter (partial match)
+
+        Returns:
+            Dictionary with groups list and total_groups count.
+        """
+        from sqlalchemy import func, desc
+        from src.storage import AnalysisHistory
+
+        try:
+            with self.db.get_session() as session:
+                # Subquery: latest record id per stock code
+                latest_sub = (
+                    session.query(
+                        AnalysisHistory.code,
+                        func.max(AnalysisHistory.id).label("max_id"),
+                        func.count(AnalysisHistory.id).label("cnt"),
+                    )
+                    .group_by(AnalysisHistory.code)
+                )
+
+                if stock_code:
+                    latest_sub = latest_sub.filter(
+                        AnalysisHistory.code.contains(stock_code)
+                    )
+
+                latest_sub = latest_sub.subquery()
+
+                # Join back to get full record details for the latest entry
+                rows = (
+                    session.query(
+                        AnalysisHistory.code,
+                        AnalysisHistory.name,
+                        AnalysisHistory.id,
+                        AnalysisHistory.sentiment_score,
+                        AnalysisHistory.operation_advice,
+                        AnalysisHistory.created_at,
+                        latest_sub.c.cnt,
+                    )
+                    .join(latest_sub, AnalysisHistory.id == latest_sub.c.max_id)
+                    .order_by(desc(AnalysisHistory.created_at))
+                    .all()
+                )
+
+                groups = []
+                for row in rows:
+                    groups.append({
+                        "stock_code": row.code,
+                        "stock_name": row.name,
+                        "record_count": row.cnt,
+                        "latest_id": row.id,
+                        "latest_sentiment_score": row.sentiment_score,
+                        "latest_operation_advice": row.operation_advice,
+                        "latest_created_at": row.created_at.isoformat() if row.created_at else None,
+                    })
+
+                return {
+                    "groups": groups,
+                    "total_groups": len(groups),
+                }
+
+        except Exception as e:
+            logger.error(f"查询分组历史失败: {e}", exc_info=True)
+            return {"groups": [], "total_groups": 0}
+
     def _resolve_record(self, record_id: str):
         """
         Resolve a record_id parameter to an AnalysisHistory object.

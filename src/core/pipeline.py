@@ -1177,24 +1177,27 @@ class StockAnalysisPipeline:
                 
                 # 单股推送模式（#55）：每分析完一只股票立即推送
                 if single_stock_notify and self.notifier.is_available():
-                    try:
-                        # 根据报告类型选择生成方法
-                        if report_type == ReportType.FULL:
-                            report_content = self.notifier.generate_dashboard_report([result])
-                            logger.info(f"[{code}] 使用完整报告格式")
-                        elif report_type == ReportType.BRIEF:
-                            report_content = self.notifier.generate_brief_report([result])
-                            logger.info(f"[{code}] 使用简洁报告格式")
-                        else:
-                            report_content = self.notifier.generate_single_stock_report(result)
-                            logger.info(f"[{code}] 使用精简报告格式")
-                        
-                        if self.notifier.send(report_content, email_stock_codes=[code]):
-                            logger.info(f"[{code}] 单股推送成功")
-                        else:
-                            logger.warning(f"[{code}] 单股推送失败")
-                    except Exception as e:
-                        logger.error(f"[{code}] 单股推送异常: {e}")
+                    if self.config.notify_actionable_only and not self._is_actionable(result):
+                        logger.info(f"[{code}] 观望/持有，跳过推送（NOTIFY_ACTIONABLE_ONLY=true）")
+                    else:
+                        try:
+                            # 根据报告类型选择生成方法
+                            if report_type == ReportType.FULL:
+                                report_content = self.notifier.generate_dashboard_report([result])
+                                logger.info(f"[{code}] 使用完整报告格式")
+                            elif report_type == ReportType.BRIEF:
+                                report_content = self.notifier.generate_brief_report([result])
+                                logger.info(f"[{code}] 使用简洁报告格式")
+                            else:
+                                report_content = self.notifier.generate_single_stock_report(result)
+                                logger.info(f"[{code}] 使用精简报告格式")
+
+                            if self.notifier.send(report_content, email_stock_codes=[code]):
+                                logger.info(f"[{code}] 单股推送成功")
+                            else:
+                                logger.warning(f"[{code}] 单股推送失败")
+                        except Exception as e:
+                            logger.error(f"[{code}] 单股推送异常: {e}")
             
             return result
             
@@ -1356,6 +1359,13 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.error(f"保存本地报告失败: {e}")
 
+    @staticmethod
+    def _is_actionable(result: AnalysisResult) -> bool:
+        """判断分析结果是否有明确操作信号（买入/卖出/减仓等）"""
+        advice = (result.operation_advice or "").strip()
+        actionable_keywords = ["买", "卖", "减仓", "布局", "buy", "sell", "reduce"]
+        return any(kw in advice.lower() for kw in actionable_keywords)
+
     def _send_notifications(
         self,
         results: List[AnalysisResult],
@@ -1372,6 +1382,17 @@ class StockAnalysisPipeline:
             skip_push: 是否跳过推送（仅保存到本地，用于单股推送模式）
         """
         try:
+            # 推送过滤：仅保留有操作信号的结果
+            if self.config.notify_actionable_only:
+                actionable = [r for r in results if self._is_actionable(r)]
+                skipped = len(results) - len(actionable)
+                if skipped:
+                    logger.info(f"推送过滤：{skipped} 只股票为观望/持有，跳过推送")
+                if not actionable:
+                    logger.info("所有股票均为观望/持有，跳过汇总推送")
+                    return
+                results = actionable
+
             logger.info("生成决策仪表盘日报...")
             report = self._generate_aggregate_report(results, report_type)
             

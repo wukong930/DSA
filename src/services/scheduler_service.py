@@ -32,6 +32,7 @@ class SchedulerService:
     def __init__(self):
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        self._running_tasks: set[int] = set()  # 正在执行的任务 ID
 
     async def start(self):
         if self._running:
@@ -74,11 +75,23 @@ class SchedulerService:
             ).scalars().all()
             task_dicts = [self._task_to_dict(t) for t in tasks]
 
+        # 以后台任务方式并发执行，不阻塞检查循环
         for task_dict in task_dicts:
-            try:
-                await self._execute_task(task_dict)
-            except Exception as e:
-                logger.warning("Failed to execute scheduled task %d: %s", task_dict["id"], e)
+            task_id = task_dict["id"]
+            if task_id in self._running_tasks:
+                continue  # 跳过正在执行的任务
+            self._running_tasks.add(task_id)
+            asyncio.create_task(self._execute_task_wrapper(task_dict))
+
+    async def _execute_task_wrapper(self, task: dict):
+        """Wrapper that tracks running state and handles errors."""
+        task_id = task["id"]
+        try:
+            await self._execute_task(task)
+        except Exception as e:
+            logger.warning("Failed to execute scheduled task %d: %s", task_id, e)
+        finally:
+            self._running_tasks.discard(task_id)
 
     async def _execute_task(self, task: dict):
         """Execute a scheduled task based on its type."""

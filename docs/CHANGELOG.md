@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.12.0] - 2026-04-06
+
+### 发布亮点
+
+- 📋 **历史报告分组查看** — 历史页面侧边栏改为按股票分组展示，同一股票的多条记录折叠在一起，点击展开；支持按股票代码搜索过滤。
+- 🔔 **智能推送过滤** — 新增 `NOTIFY_ACTIONABLE_ONLY` 配置项（默认开启），仅在分析结果有明确买入/卖出/减仓信号时才推送通知，观望/持有状态自动跳过。
+- ⚡ **定时任务真并发调度** — 修复定时任务调度器阻塞问题：改为 fire-and-forget 并发执行 + 运行任务去重，防止长任务阻塞检查循环导致后续任务被饿死。
+- 🛡️ **关闭启动自动执行** — 默认关闭 `RUN_IMMEDIATELY` 和 `SCHEDULE_RUN_IMMEDIATELY`，服务重启后不再自动跑分析，避免产生大量重复报告。
+
+### 新功能
+
+- 📋 **历史报告分组展示** — `GET /api/v1/history/grouped` 返回按股票代码分组的数据（每组含最新记录摘要 + 记录总数）；前端 `HistoryGroupList` 组件支持折叠/展开，展开时懒加载该股票所有历史记录。
+- 🔔 **操作信号推送过滤** — `NOTIFY_ACTIONABLE_ONLY` 环境变量控制：开启后单股推送和汇总推送均过滤掉"观望/持有"结果，无操作信号时跳过整次推送；可通过 `.env` 随时切换。
+
+### 改进
+
+- ⚡ **定时任务调度并发模型** — `_check_due_tasks` 改为并发 fire-and-forget 执行，任务完成后通过 `_running_tasks` set 跟踪状态；调度循环不再被长任务阻塞，多任务场景下不再出现任务饿死现象。
+- 🛡️ **启动安全防护** — `RUN_IMMEDIATELY` 和 `SCHEDULE_RUN_IMMEDIATELY` 默认关闭，容器重启后不会自动触发分析；需要时可手动在 `.env` 中开启。
+
+### 修复
+
+- ⚡ **定时任务调度阻塞** — 修复 `_check_due_tasks` 中 `await asyncio.gather()` 阻塞检查循环的问题；改为 `asyncio.create_task()` 并发执行 + `_running_tasks` 去重，确保定时任务按预期时间窗口触发。
+- 🛡️ **服务重启后重复分析** — 设置 `RUN_IMMEDIATELY=false` 和 `SCHEDULE_RUN_IMMEDIATELY=false` 为默认值，防止服务重启时自动触发分析导致同一股票产生多条重复报告。
+
 ## [3.11.0] - 2026-03-27
 
 ### 发布亮点

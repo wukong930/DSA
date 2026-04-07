@@ -7,6 +7,8 @@ import type {
   AnalysisReport,
   NewsIntelResponse,
   NewsIntelItem,
+  HistoryGroupedResponse,
+  HistoryGroupItem,
 } from '../types/analysis';
 
 // ============ API 接口 ============
@@ -17,6 +19,25 @@ export interface GetHistoryListParams extends HistoryFilters {
 }
 
 export const historyApi = {
+  /**
+   * 获取按股票分组的历史记录
+   * @param stockCode 可选股票代码筛选
+   */
+  getGrouped: async (stockCode?: string): Promise<HistoryGroupedResponse> => {
+    const params: Record<string, string> = {};
+    if (stockCode) params.stock_code = stockCode;
+
+    const response = await apiClient.get<Record<string, unknown>>('/api/v1/history/grouped', {
+      params,
+    });
+
+    const data = toCamelCase<HistoryGroupedResponse>(response.data);
+    return {
+      groups: (data.groups || []).map(g => toCamelCase<HistoryGroupItem>(g)),
+      totalGroups: data.totalGroups,
+    };
+  },
+
   /**
    * 获取历史分析列表
    * @param params 筛选和分页参数

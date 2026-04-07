@@ -17,21 +17,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - 🔔 **智能推送过滤** — 新增 `NOTIFY_ACTIONABLE_ONLY` 配置项（默认开启），仅在分析结果有明确买入/卖出/减仓信号时才推送通知，观望/持有状态自动跳过。
 - ⚡ **定时任务真并发调度** — 修复定时任务调度器阻塞问题：改为 fire-and-forget 并发执行 + 运行任务去重，防止长任务阻塞检查循环导致后续任务被饿死。
 - 🛡️ **关闭启动自动执行** — 默认关闭 `RUN_IMMEDIATELY` 和 `SCHEDULE_RUN_IMMEDIATELY`，服务重启后不再自动跑分析，避免产生大量重复报告。
+- 🔮 **TimesFM 时序预测上线** — 集成 Google TimesFM 2.5 模型（预测 5 日价格走势），分析流水线 Step 3.5 自动注入预测结果至 LLM 上下文，Dashboard 新增 ForecastPanel 可视化展示；支持 Docker 内置模型缓存。
 
 ### 新功能
 
 - 📋 **历史报告分组展示** — `GET /api/v1/history/grouped` 返回按股票代码分组的数据（每组含最新记录摘要 + 记录总数）；前端 `HistoryGroupList` 组件支持折叠/展开，展开时懒加载该股票所有历史记录。
 - 🔔 **操作信号推送过滤** — `NOTIFY_ACTIONABLE_ONLY` 环境变量控制：开启后单股推送和汇总推送均过滤掉"观望/持有"结果，无操作信号时跳过整次推送；可通过 `.env` 随时切换。
+- 🔮 **TimesFM 时序预测** — `ForecastService` 集成 Google TimesFM 2.5-200M 模型，`/api/v1/forecast/{stock_code}` 接口返回 5 日价格预测；Pipeline Step 3.5 自动注入预测结果至 LLM 分析上下文；前端 Dashboard 新增 ForecastPanel 组件展示预测走势。
 
 ### 改进
 
 - ⚡ **定时任务调度并发模型** — `_check_due_tasks` 改为并发 fire-and-forget 执行，任务完成后通过 `_running_tasks` set 跟踪状态；调度循环不再被长任务阻塞，多任务场景下不再出现任务饿死现象。
 - 🛡️ **启动安全防护** — `RUN_IMMEDIATELY` 和 `SCHEDULE_RUN_IMMEDIATELY` 默认关闭，容器重启后不会自动触发分析；需要时可手动在 `.env` 中开启。
+- 🤖 **Agent LLM 默认 token 上限提升** — `src/agent/llm_adapter.py` 默认 `max_tokens` 从 1024 提升至 8192，避免 moonshot-v1-8k 等模型输出被截断导致 dashboard JSON 不完整。
 
 ### 修复
 
 - ⚡ **定时任务调度阻塞** — 修复 `_check_due_tasks` 中 `await asyncio.gather()` 阻塞检查循环的问题；改为 `asyncio.create_task()` 并发执行 + `_running_tasks` 去重，确保定时任务按预期时间窗口触发。
 - 🛡️ **服务重启后重复分析** — 设置 `RUN_IMMEDIATELY=false` 和 `SCHEDULE_RUN_IMMEDIATELY=false` 为默认值，防止服务重启时自动触发分析导致同一股票产生多条重复报告。
+- 🔮 **TimesFM 检查点兼容性**（fixes #876）— TimesFM 2.5-200M 的 `.safetensors` 检查点键名（`stacked_xf.*`）与 timesfm 1.3.0 期望的键名（`stacked_transformer.layers.*`）不兼容；切换为 `google/timesfm-1.0-200m-pytorch` 并移除不支持的 `prediction_length` 参数。
+
+### 文档
+
+- 🔧 **Docker 构建集成 TimesFM** — `docker/Dockerfile` 新增构建时预下载 timesfm 模型，降低容器冷启动延迟；`requirements-forecast.txt` 分离预测相关依赖；`docker-compose.yml` 新增 postgres 服务并调高 server 内存限制。
 
 ## [3.11.0] - 2026-03-27
 

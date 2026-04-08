@@ -113,11 +113,19 @@ class SchedulerService:
     async def _run_daily_analysis(self, stock_codes: list, task: dict, analysis_mode: str = "traditional"):
         """Run analysis for a list of stocks."""
         from src.core.pipeline import run_analysis_pipeline
+        from src.config import get_config
+        config = get_config()
+        per_stock_timeout = getattr(config, "agent_orchestrator_timeout_s", 600) + 60  # agent budget + buffer
 
         for code in stock_codes:
             try:
-                await asyncio.to_thread(run_analysis_pipeline, code, analysis_mode=analysis_mode)
+                await asyncio.wait_for(
+                    asyncio.to_thread(run_analysis_pipeline, code, analysis_mode=analysis_mode),
+                    timeout=per_stock_timeout,
+                )
                 logger.info("Scheduled analysis completed for %s (task %d, mode=%s)", code, task["id"], analysis_mode)
+            except asyncio.TimeoutError:
+                logger.warning("Scheduled analysis timed out for %s (task %d, limit=%ds)", code, task["id"], per_stock_timeout)
             except Exception as e:
                 logger.warning("Scheduled analysis failed for %s: %s", code, e)
 

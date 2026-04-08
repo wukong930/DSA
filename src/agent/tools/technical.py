@@ -62,6 +62,12 @@ def _get_ta_service():
 
 def _handle_get_technical_indicators(stock_code: str, days: int = 90) -> dict:
     """Compute all 43 technical indicators for a stock."""
+    from src.agent.tools._cache import get_cached
+    cached = get_cached("technical_indicators", stock_code)
+    if cached:
+        logger.info("get_technical_indicators(%s): using pre-fetched data", stock_code)
+        return cached
+
     if not (stock_code and str(stock_code).strip()):
         return {"error": "stock_code is required"}
 
@@ -89,6 +95,12 @@ def _handle_get_technical_indicators(stock_code: str, days: int = 90) -> dict:
 
 def _handle_get_technical_signals(stock_code: str) -> dict:
     """Extract trading signals (golden cross, overbought, etc.) from indicators."""
+    from src.agent.tools._cache import get_cached
+    cached = get_cached("technical_indicators", stock_code)
+    if cached and isinstance(cached, dict) and "signals" in cached:
+        logger.info("get_technical_signals(%s): using pre-fetched data", stock_code)
+        return {"stock_code": stock_code, "signals": cached["signals"]}
+
     if not (stock_code and str(stock_code).strip()):
         return {"error": "stock_code is required"}
 

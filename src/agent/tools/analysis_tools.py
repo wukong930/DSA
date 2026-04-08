@@ -62,7 +62,13 @@ def _fetch_trend_data(stock_code: str):
 
 def _handle_analyze_trend(stock_code: str) -> dict:
     """Run technical trend analysis on a stock."""
+    from src.agent.tools._cache import get_cached
     from src.stock_analyzer import StockTrendAnalyzer
+
+    cached = get_cached("trend_result", stock_code)
+    if cached:
+        logger.info("analyze_trend(%s): using pre-fetched data", stock_code)
+        return cached
 
     if not (stock_code and str(stock_code).strip()):
         return {"error": "stock_code is required"}

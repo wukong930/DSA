@@ -194,7 +194,7 @@ class StockAnalysisPipeline:
             logger.error(f"{stock_name}({code}) {error_msg}")
             return False, error_msg
     
-    def analyze_stock(self, code: str, report_type: ReportType, query_id: str) -> Optional[AnalysisResult]:
+    def analyze_stock(self, code: str, report_type: ReportType, query_id: str, pre_forecast=None) -> Optional[AnalysisResult]:
         """
         分析单只股票（增强版：含量比、换手率、筹码分析、多维度情报）
         
@@ -314,17 +314,19 @@ class StockAnalysisPipeline:
                 logger.warning(f"{stock_name}({code}) 趋势分析失败: {e}", exc_info=True)
 
             # Step 3.5: 时序预测（可选，TimesFM）— 在 Agent 分支之前执行，供两条路径共用
-            forecast_result = None
-            if self.forecast_service is not None:
+            forecast_result = pre_forecast
+            if forecast_result is None and self.forecast_service is not None:
                 try:
                     end_date_fc = date.today()
                     start_date_fc = end_date_fc - timedelta(days=365)  # ~250 trading days
                     fc_bars = self.db.get_data_range(code, start_date_fc, end_date_fc)
                     if fc_bars and len(fc_bars) >= 30:
                         fc_df = pd.DataFrame([bar.to_dict() for bar in fc_bars])
+                        covariate_cols = getattr(self.config, 'forecast_covariate_cols', None)
                         forecast_result = self.forecast_service.forecast(
                             fc_df, code,
                             horizon_days=self.config.forecast_horizon_days,
+                            covariate_cols=covariate_cols,
                         )
                     else:
                         logger.info(f"{stock_name}({code}) 历史数据不足，跳过时序预测")
@@ -411,6 +413,23 @@ class StockAnalysisPipeline:
                     'yesterday': {}
                 }
             
+            # Step 5.5: 预计算技术指标（传统路径也使用，与 Agent 路径对齐）
+            technical_indicators = None
+            try:
+                from src.services.ta_indicator_service import TAIndicatorService
+                ta_df = self.db.get_daily_data(code, limit=90)
+                if ta_df is not None and len(ta_df) >= 20:
+                    ta_service = TAIndicatorService()
+                    result_df = ta_service.compute_all(ta_df)
+                    technical_indicators = {
+                        "stock_code": code,
+                        "data_points": len(result_df),
+                        "indicators": ta_service.get_summary(result_df),
+                        "signals": ta_service.get_signals(result_df),
+                    }
+            except Exception as e:
+                logger.warning(f"[{code}] 技术指标预计算失败: {e}")
+
             # Step 6: 增强上下文数据（添加实时行情、筹码、趋势分析结果、股票名称）
             enhanced_context = self._enhance_context(
                 context,
@@ -420,6 +439,7 @@ class StockAnalysisPipeline:
                 stock_name,  # 传入股票名称
                 fundamental_context,
                 forecast_result,
+                technical_indicators,
             )
             
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
@@ -476,6 +496,7 @@ class StockAnalysisPipeline:
         stock_name: str = "",
         fundamental_context: Optional[Dict[str, Any]] = None,
         forecast_result=None,
+        technical_indicators: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         增强分析上下文
@@ -555,6 +576,10 @@ class StockAnalysisPipeline:
         # 添加时序预测结果
         if forecast_result:
             enhanced['forecast'] = forecast_result.to_dict()
+
+        # 添加技术指标
+        if technical_indicators:
+            enhanced['technical_indicators'] = technical_indicators
 
         # Issue #234: Override today with realtime OHLC + trend MA for intraday analysis
         # Guard: trend_result.ma5 > 0 ensures MA calculation succeeded (data sufficient)
@@ -1067,6 +1092,7 @@ class StockAnalysisPipeline:
             "news_content": news_content,
             "realtime_quote_raw": self._safe_to_dict(realtime_quote),
             "chip_distribution_raw": self._safe_to_dict(chip_data),
+            "forecast": enhanced_context.get("forecast"),
         }
 
     @staticmethod
@@ -1142,6 +1168,7 @@ class StockAnalysisPipeline:
         single_stock_notify: bool = False,
         report_type: ReportType = ReportType.SIMPLE,
         analysis_query_id: Optional[str] = None,
+        pre_forecast=None,
     ) -> Optional[AnalysisResult]:
         """
         处理单只股票的完整流程
@@ -1160,6 +1187,7 @@ class StockAnalysisPipeline:
             skip_analysis: 是否跳过 AI 分析
             single_stock_notify: 是否启用单股推送模式（每分析完一只立即推送）
             report_type: 报告类型枚举（从配置读取，Issue #119）
+            pre_forecast: Pre-computed ForecastResult from batch inference (optional)
 
         Returns:
             AnalysisResult 或 None
@@ -1180,7 +1208,7 @@ class StockAnalysisPipeline:
                 return None
             
             effective_query_id = analysis_query_id or self.query_id or uuid.uuid4().hex
-            result = self.analyze_stock(code, report_type, query_id=effective_query_id)
+            result = self.analyze_stock(code, report_type, query_id=effective_query_id, pre_forecast=pre_forecast)
             
             if result:
                 if not result.success:
@@ -1293,7 +1321,31 @@ class StockAnalysisPipeline:
             logger.info(f"已启用单股推送模式：每分析完一只股票立即推送（报告类型: {report_type_str}）")
         
         results: List[AnalysisResult] = []
-        
+
+        # Batch forecast: pre-compute all forecasts in one model call
+        batch_forecasts: dict = {}
+        if self.forecast_service is not None and not dry_run and getattr(self.config, 'forecast_batch_enabled', True):
+            try:
+                batch_stocks = []
+                for code in stock_codes:
+                    end_date_fc = date.today()
+                    start_date_fc = end_date_fc - timedelta(days=365)
+                    fc_bars = self.db.get_data_range(code, start_date_fc, end_date_fc)
+                    if fc_bars and len(fc_bars) >= 30:
+                        fc_df = pd.DataFrame([bar.to_dict() for bar in fc_bars])
+                        batch_stocks.append((fc_df, code))
+                if batch_stocks:
+                    covariate_cols = getattr(self.config, 'forecast_covariate_cols', None)
+                    batch_forecasts = self.forecast_service.forecast_batch(
+                        batch_stocks,
+                        horizon_days=self.config.forecast_horizon_days,
+                        covariate_cols=covariate_cols,
+                    )
+                    logger.info(f"批量时序预测完成: {len(batch_forecasts)} 只股票")
+            except Exception as e:
+                logger.warning(f"批量时序预测失败，将回退到逐只预测: {e}")
+                batch_forecasts = {}
+
         # 使用线程池并发处理
         # 注意：max_workers 设置较低（默认3）以避免触发反爬
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -1306,6 +1358,7 @@ class StockAnalysisPipeline:
                     single_stock_notify=single_stock_notify and send_notification,
                     report_type=report_type,  # Issue #119: 传递报告类型
                     analysis_query_id=uuid.uuid4().hex,
+                    pre_forecast=batch_forecasts.get(code),
                 ): code
                 for code in stock_codes
             }

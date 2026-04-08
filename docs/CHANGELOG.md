@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.14.0] - 2026-04-09
+
+### 改进
+
+- 🔧 **工具缓存线程安全** — `_cache.py` 从单一全局 dict 改为 `threading.Lock` 保护的按股票代码分桶存储，修复多股票并行分析时缓存互相覆盖的竞态条件。
+- 🔗 **Agent 数据断路修复** — `executor._build_user_message()` 补上 `fundamental_context` 和 `trend_result` 注入，pipeline 预取的基本面和趋势数据不再是死数据。
+- ⚡ **工具重复抓取消除** — 8 个 Agent 工具（realtime_quote / daily_history / chip_distribution / technical_indicators / technical_signals / analyze_trend / search_news / comprehensive_intel）增加缓存守卫，pipeline 已预取的数据直接复用，减少 1-3 轮冗余 API 调用。
+- 📊 **传统路径技术指标** — 传统分析路径（非 Agent）现在也预计算 43 项技术指标并渲染到 LLM prompt 中，消除两条路径的指标不对称。
+- 🗂️ **Orchestrator 预填充补全** — 预填充循环补上 `forecast` 和 `fundamental_context` 两个遗漏 key，Agent 各阶段可直接访问。
+- 💾 **Forecast 持久化** — `context_snapshot` 现在包含 forecast 字段，历史报告可回溯预测数据。
+- 💬 **Chat 模式缓存复用** — `executor.chat()` 现在传递 `prefetched_data` 给 `_run_loop()`，对话模式也能复用预取数据。
+
 ## [3.13.0] - 2026-04-07
 
 ### 新功能

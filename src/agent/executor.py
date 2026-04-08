@@ -495,7 +495,7 @@ class AgentExecutor:
             {"role": "user", "content": self._build_user_message(task, context)},
         ]
 
-        return self._run_loop(messages, tool_decls, parse_dashboard=True)
+        return self._run_loop(messages, tool_decls, parse_dashboard=True, prefetched_data=context)
 
     def chat(self, message: str, session_id: str, progress_callback: Optional[Callable] = None, context: Optional[Dict[str, Any]] = None) -> AgentResult:
         """Execute the agent loop for a free-form chat message.
@@ -577,7 +577,7 @@ class AgentExecutor:
         # Persist the user turn immediately so the session appears in history during processing
         conversation_manager.add_message(session_id, "user", message)
 
-        result = self._run_loop(messages, tool_decls, parse_dashboard=False, progress_callback=progress_callback)
+        result = self._run_loop(messages, tool_decls, parse_dashboard=False, progress_callback=progress_callback, prefetched_data=context)
 
         # Persist assistant reply (or error note) for context continuity
         if result.success:
@@ -588,21 +588,29 @@ class AgentExecutor:
 
         return result
 
-    def _run_loop(self, messages: List[Dict[str, Any]], tool_decls: List[Dict[str, Any]], parse_dashboard: bool, progress_callback: Optional[Callable] = None) -> AgentResult:
+    def _run_loop(self, messages: List[Dict[str, Any]], tool_decls: List[Dict[str, Any]], parse_dashboard: bool, progress_callback: Optional[Callable] = None, prefetched_data: Optional[Dict[str, Any]] = None) -> AgentResult:
         """Delegate to the shared runner and adapt the result.
 
         This preserves the exact same observable behaviour as the original
         inline implementation while sharing the single authoritative loop
         in :mod:`src.agent.runner`.
         """
-        loop_result = run_agent_loop(
-            messages=messages,
-            tool_registry=self.tool_registry,
-            llm_adapter=self.llm_adapter,
-            max_steps=self.max_steps,
-            progress_callback=progress_callback,
-            max_wall_clock_seconds=self.timeout_seconds,
-        )
+        from src.agent.tools._cache import set_tool_context, clear_tool_context
+
+        if prefetched_data:
+            set_tool_context(prefetched_data)
+        try:
+            loop_result = run_agent_loop(
+                messages=messages,
+                tool_registry=self.tool_registry,
+                llm_adapter=self.llm_adapter,
+                max_steps=self.max_steps,
+                progress_callback=progress_callback,
+                max_wall_clock_seconds=self.timeout_seconds,
+            )
+        finally:
+            stock_code = (prefetched_data or {}).get("stock_code", "")
+            clear_tool_context(stock_code)
 
         model_str = loop_result.model
 
@@ -653,6 +661,12 @@ class AgentExecutor:
                 parts.append(f"\n[系统已获取的筹码分布]\n{json.dumps(context['chip_distribution'], ensure_ascii=False)}")
             if context.get("technical_indicators"):
                 parts.append(f"\n[系统已预计算的43项技术指标]\n{json.dumps(context['technical_indicators'], ensure_ascii=False)}")
+            if context.get("forecast"):
+                parts.append(f"\n[系统已获取的AI时序预测(TimesFM)]\n{json.dumps(context['forecast'], ensure_ascii=False)}")
+            if context.get("trend_result"):
+                parts.append(f"\n[系统已获取的趋势分析]\n{json.dumps(context['trend_result'], ensure_ascii=False)}")
+            if context.get("fundamental_context"):
+                parts.append(f"\n[系统已获取的基本面数据]\n{json.dumps(context['fundamental_context'], ensure_ascii=False)}")
             if context.get("news_context"):
                 parts.append(f"\n[系统已获取的新闻与舆情情报]\n{context['news_context']}")
 

@@ -1478,6 +1478,84 @@ class GeminiAnalyzer:
 - 价格较昨日变化：{context.get('price_change_ratio', 'N/A')}%
 """
         
+        # 添加 AI 时序预测（TimesFM）
+        if 'forecast' in context:
+            fc = context['forecast']
+            if report_language == "en":
+                trend_emoji = {"up": "📈", "down": "📉", "neutral": "➡️"}.get(fc.get("trend", ""), "❓")
+                trend_label_map = {"up": "Bullish", "down": "Bearish", "neutral": "Sideways"}
+                trend_label = trend_label_map.get(fc.get("trend", ""), "Unknown")
+                prompt += f"""
+### 🤖 AI Time-Series Forecast (TimesFM)
+| Metric | Value |
+|--------|-------|
+| Forecast Horizon | {fc.get('horizon_days', 'N/A')} trading days |
+| Trend | {trend_emoji} **{trend_label}** |
+| Predicted Change | {fc.get('trend_pct', 0):+.2f}% |
+| Last Close | {fc.get('last_close', 'N/A')} |
+| Model | {fc.get('model_version', 'N/A')} |
+
+#### Daily Forecast Detail
+| Day | Predicted | Lower(10%) | Upper(90%) |
+|-----|-----------|------------|------------|
+"""
+            else:
+                trend_emoji = {"up": "📈", "down": "📉", "neutral": "➡️"}.get(fc.get("trend", ""), "❓")
+                trend_label_map = {"up": "看涨", "down": "看跌", "neutral": "震荡"}
+                trend_label = trend_label_map.get(fc.get("trend", ""), "未知")
+                prompt += f"""
+### 🤖 AI 时序预测（TimesFM）
+| 指标 | 数值 |
+|------|------|
+| 预测天数 | {fc.get('horizon_days', 'N/A')} 个交易日 |
+| 趋势判断 | {trend_emoji} **{trend_label}** |
+| 预测涨跌幅 | {fc.get('trend_pct', 0):+.2f}% |
+| 最近收盘价 | {fc.get('last_close', 'N/A')} 元 |
+| 模型版本 | {fc.get('model_version', 'N/A')} |
+
+#### 逐日预测明细
+| 交易日 | 预测价 | 下界(10%) | 上界(90%) |
+|--------|--------|-----------|-----------|
+"""
+            prices = fc.get('predicted_prices', [])
+            lowers = fc.get('lower_bound', [])
+            uppers = fc.get('upper_bound', [])
+            for i in range(len(prices)):
+                lower_val = lowers[i] if i < len(lowers) else 'N/A'
+                upper_val = uppers[i] if i < len(uppers) else 'N/A'
+                prompt += f"| T+{i+1} | {prices[i]} | {lower_val} | {upper_val} |\n"
+
+            if report_language == "en":
+                prompt += """
+> ⚠️ The above is a statistical forecast from the TimesFM time-series model, for reference only. Combine with technical and fundamental analysis.
+"""
+            else:
+                prompt += """
+> ⚠️ 以上为 TimesFM 时序模型的统计预测，仅供参考，需结合技术面和消息面综合判断。
+"""
+
+        # 添加预计算技术指标摘要
+        ti = context.get('technical_indicators')
+        if ti and isinstance(ti, dict):
+            signals = ti.get('signals', {})
+            indicators = ti.get('indicators', {})
+            if report_language == "en":
+                prompt += f"""
+### 📊 Pre-computed Technical Indicators ({ti.get('data_points', 'N/A')} data points)
+"""
+            else:
+                prompt += f"""
+### 📊 预计算技术指标（{ti.get('data_points', 'N/A')} 个数据点）
+"""
+            if signals:
+                import json as _json
+                prompt += f"**交易信号**: {_json.dumps(signals, ensure_ascii=False)}\n"
+            if indicators:
+                # 只输出关键摘要，避免 prompt 过长
+                for section_name, section_data in indicators.items():
+                    if isinstance(section_data, dict):
+                        prompt += f"- **{section_name}**: {_json.dumps(section_data, ensure_ascii=False)}\n"
+
         # 添加新闻搜索结果（重点区域）
         news_window_days: Optional[int] = None
         context_window = context.get("news_window_days")

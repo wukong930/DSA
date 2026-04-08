@@ -195,6 +195,8 @@ class AgentOrchestrator:
         timeout_seconds: Optional[float] = None,
     ) -> StageResult:
         """Run a stage agent while preserving compatibility with older call signatures."""
+        from src.agent.tools._cache import set_tool_context, clear_tool_context
+
         run_kwargs = {"progress_callback": progress_callback}
         if (
             timeout_seconds is not None
@@ -202,7 +204,16 @@ class AgentOrchestrator:
             and self._agent_run_accepts_timeout(agent.run)
         ):
             run_kwargs["timeout_seconds"] = timeout_seconds
-        return agent.run(ctx, **run_kwargs)
+
+        # Inject pre-fetched data so tool handlers can skip redundant fetches
+        cache_data = dict(ctx.data)
+        if ctx.stock_code:
+            cache_data.setdefault("stock_code", ctx.stock_code)
+        set_tool_context(cache_data)
+        try:
+            return agent.run(ctx, **run_kwargs)
+        finally:
+            clear_tool_context(ctx.stock_code or "")
 
     # -----------------------------------------------------------------
     # Public interface (mirrors AgentExecutor)
@@ -589,7 +600,8 @@ class AgentOrchestrator:
 
             # Pre-populate data fields that the caller already has
             for data_key in ("realtime_quote", "daily_history", "chip_distribution",
-                             "trend_result", "news_context", "technical_indicators"):
+                             "trend_result", "news_context", "technical_indicators",
+                             "forecast", "fundamental_context"):
                 if context.get(data_key):
                     ctx.set_data(data_key, context[data_key])
 

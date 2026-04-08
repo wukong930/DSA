@@ -179,6 +179,12 @@ def _compact_portfolio_risk(risk: dict, top_n: int = 10) -> dict:
 
 def _handle_get_realtime_quote(stock_code: str) -> dict:
     """Get real-time stock quote."""
+    from src.agent.tools._cache import get_cached
+    cached = get_cached("realtime_quote", stock_code)
+    if cached:
+        logger.info("get_realtime_quote(%s): using pre-fetched data", stock_code)
+        return cached
+
     manager = _get_fetcher_manager()
     quote = manager.get_realtime_quote(stock_code)
     if quote is None:
@@ -234,6 +240,12 @@ get_realtime_quote_tool = ToolDefinition(
 
 def _handle_get_daily_history(stock_code: str, days: int = 60) -> dict:
     """Get daily OHLCV history data."""
+    from src.agent.tools._cache import get_cached
+    cached = get_cached("daily_history", stock_code)
+    if cached:
+        logger.info("get_daily_history(%s): using pre-fetched data", stock_code)
+        return cached
+
     manager = _get_fetcher_manager()
     df, source = manager.get_daily_data(stock_code, days=days)
 
@@ -284,6 +296,12 @@ get_daily_history_tool = ToolDefinition(
 
 def _handle_get_chip_distribution(stock_code: str) -> dict:
     """Get chip distribution data."""
+    from src.agent.tools._cache import get_cached
+    cached = get_cached("chip_distribution", stock_code)
+    if cached:
+        logger.info("get_chip_distribution(%s): using pre-fetched data", stock_code)
+        return cached
+
     manager = _get_fetcher_manager()
     chip = manager.get_chip_distribution(stock_code)
 

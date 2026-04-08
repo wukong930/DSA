@@ -23,6 +23,15 @@ def _get_search_service():
 
 def _handle_search_stock_news(stock_code: str, stock_name: str) -> dict:
     """Search latest news for a stock."""
+    from src.agent.tools._cache import get_cached
+    cached = get_cached("news_context", stock_code)
+    if cached:
+        logger.info("search_stock_news(%s): using pre-fetched data", stock_code)
+        # news_context may be a string from pipeline; wrap for tool response format
+        if isinstance(cached, str):
+            return {"success": True, "source": "pre-fetched", "content": cached}
+        return cached
+
     service = _get_search_service()
 
     if not service.is_available:
@@ -83,6 +92,14 @@ search_stock_news_tool = ToolDefinition(
 
 def _handle_search_comprehensive_intel(stock_code: str, stock_name: str) -> dict:
     """Multi-dimensional intelligence search."""
+    from src.agent.tools._cache import get_cached
+    cached = get_cached("news_context", stock_code)
+    if cached:
+        logger.info("search_comprehensive_intel(%s): using pre-fetched data", stock_code)
+        if isinstance(cached, str):
+            return {"success": True, "source": "pre-fetched", "content": cached}
+        return cached
+
     service = _get_search_service()
 
     if not service.is_available:

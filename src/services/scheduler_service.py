@@ -111,12 +111,15 @@ class SchedulerService:
         self._update_after_run(task["id"], task["schedule_config"])
 
     async def _run_daily_analysis(self, stock_codes: list, task: dict, analysis_mode: str = "traditional"):
-        """Run analysis for a list of stocks."""
+        """Run analysis for a list of stocks with one retry for failures."""
         from src.core.pipeline import run_analysis_pipeline
         from src.config import get_config
         config = get_config()
-        per_stock_timeout = getattr(config, "agent_orchestrator_timeout_s", 600) + 60  # agent budget + buffer
+        per_stock_timeout = getattr(config, "agent_orchestrator_timeout_s", 600) + 60
 
+        failed_codes: list[str] = []
+
+        # First pass
         for code in stock_codes:
             try:
                 await asyncio.wait_for(
@@ -126,8 +129,25 @@ class SchedulerService:
                 logger.info("Scheduled analysis completed for %s (task %d, mode=%s)", code, task["id"], analysis_mode)
             except asyncio.TimeoutError:
                 logger.warning("Scheduled analysis timed out for %s (task %d, limit=%ds)", code, task["id"], per_stock_timeout)
+                failed_codes.append(code)
             except Exception as e:
                 logger.warning("Scheduled analysis failed for %s: %s", code, e)
+                failed_codes.append(code)
+
+        # Retry pass — one attempt for each failed stock
+        if failed_codes:
+            logger.info("Retrying %d failed stock(s) for task %d: %s", len(failed_codes), task["id"], failed_codes)
+            for code in failed_codes:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.to_thread(run_analysis_pipeline, code, analysis_mode=analysis_mode),
+                        timeout=per_stock_timeout,
+                    )
+                    logger.info("Retry succeeded for %s (task %d)", code, task["id"])
+                except asyncio.TimeoutError:
+                    logger.warning("Retry timed out for %s (task %d), skipping until next cycle", code, task["id"])
+                except Exception as e:
+                    logger.warning("Retry failed for %s (task %d): %s, skipping until next cycle", code, task["id"], e)
 
     def _update_after_run(self, task_id: int, schedule_config: dict):
         """Update last_run_at and compute next_run_at."""

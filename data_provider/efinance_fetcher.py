@@ -165,6 +165,9 @@ def _is_us_code(stock_code: str) -> bool:
     return bool(re.match(r'^[A-Z]{1,5}(\.[A-Z])?$', code))
 
 
+_EF_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ef-timeout")
+
+
 def _ef_call_with_timeout(func, *args, timeout=None, **kwargs):
     """Run an efinance library call in a thread with a timeout.
 
@@ -174,18 +177,14 @@ def _ef_call_with_timeout(func, *args, timeout=None, **kwargs):
     cannot be forcibly killed, so the worker thread may continue running in
     the background until the OS-level TCP timeout fires or the process exits.
     This is acceptable — the calling thread returns promptly on timeout.
+
+    Uses a module-level ThreadPoolExecutor to avoid creating (and leaking)
+    a new executor on every call.
     """
     if timeout is None:
         timeout = _EF_CALL_TIMEOUT
-    # Do NOT use 'with ThreadPoolExecutor(...)' here: the context manager calls
-    # shutdown(wait=True) on __exit__, which would re-block on the hung thread.
-    executor = ThreadPoolExecutor(max_workers=1)
-    try:
-        future = executor.submit(func, *args, **kwargs)
-        return future.result(timeout=timeout)
-    finally:
-        # wait=False: calling thread returns immediately; worker cleans up later
-        executor.shutdown(wait=False)
+    future = _EF_EXECUTOR.submit(func, *args, **kwargs)
+    return future.result(timeout=timeout)
 
 
 def _classify_eastmoney_error(exc: Exception) -> Tuple[str, str]:

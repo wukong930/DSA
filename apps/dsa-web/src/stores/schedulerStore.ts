@@ -48,6 +48,10 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
         isActive: true,
         lastRunAt: null,
         nextRunAt: new Date(Date.now() + 86400000).toISOString(),
+        runStatus: 'idle',
+        failureCount: 0,
+        consecutiveFailures: 0,
+        lastError: null,
         createdAt: new Date().toISOString(),
       };
       set({ tasks: [...get().tasks, newTask] });

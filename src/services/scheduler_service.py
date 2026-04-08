@@ -32,12 +32,12 @@ class SchedulerService:
     def __init__(self):
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self._running_tasks: set[int] = set()  # 正在执行的任务 ID
 
     async def start(self):
         if self._running:
             return
         self._running = True
+        self._reset_stale_running_tasks()
         self._task = asyncio.create_task(self._loop())
         logger.info("SchedulerService started")
 
@@ -61,6 +61,21 @@ class SchedulerService:
                 logger.error("SchedulerService loop error: %s", e, exc_info=True)
             await asyncio.sleep(60)
 
+    def _reset_stale_running_tasks(self):
+        """On startup, reset any tasks stuck in 'running' state from a previous crash."""
+        from src.storage import ScheduledTask
+        db = _get_db()
+        with db.get_session() as session:
+            stale = session.execute(
+                select(ScheduledTask).where(ScheduledTask.run_status == 'running')
+            ).scalars().all()
+            for t in stale:
+                logger.warning("Resetting stale running task %d to idle (crash recovery)", t.id)
+                t.run_status = 'idle'
+                t.run_started_at = None
+            if stale:
+                session.commit()
+
     async def _check_due_tasks(self):
         """Find and execute tasks whose next_run_at has passed."""
         from src.storage import ScheduledTask
@@ -71,47 +86,49 @@ class SchedulerService:
                 select(ScheduledTask).where(
                     ScheduledTask.is_active == True,
                     ScheduledTask.next_run_at <= now,
+                    ScheduledTask.run_status != 'running',
                 )
             ).scalars().all()
             task_dicts = [self._task_to_dict(t) for t in tasks]
 
-        # 以后台任务方式并发执行，不阻塞检查循环
         for task_dict in task_dicts:
-            task_id = task_dict["id"]
-            if task_id in self._running_tasks:
-                continue  # 跳过正在执行的任务
-            self._running_tasks.add(task_id)
             asyncio.create_task(self._execute_task_wrapper(task_dict))
 
     async def _execute_task_wrapper(self, task: dict):
-        """Wrapper that tracks running state and handles errors."""
+        """Wrapper that tracks running state in DB and handles errors."""
         task_id = task["id"]
+        self._set_run_status(task_id, 'running')
+        error_msg = None
         try:
-            await self._execute_task(task)
+            failed = await self._execute_task(task)
+            if failed:
+                error_msg = f"Failed stocks: {', '.join(failed)}"
         except Exception as e:
+            error_msg = str(e)
             logger.warning("Failed to execute scheduled task %d: %s", task_id, e)
         finally:
-            self._running_tasks.discard(task_id)
+            self._set_run_status(task_id, 'idle')
+            self._record_execution_result(task_id, error_msg)
 
-    async def _execute_task(self, task: dict):
-        """Execute a scheduled task based on its type."""
+    async def _execute_task(self, task: dict) -> list[str]:
+        """Execute a scheduled task. Returns list of failed stock codes."""
         task_type = task["task_type"]
         stock_codes = task["stock_codes"]
         analysis_mode = task.get("analysis_mode", "traditional")
+        failed: list[str] = []
 
-        if task_type == "daily_analysis":
-            await self._run_daily_analysis(stock_codes, task, analysis_mode)
-        elif task_type == "custom_range":
-            await self._run_daily_analysis(stock_codes, task, analysis_mode)
+        if task_type in ("daily_analysis", "custom_range"):
+            failed = await self._run_daily_analysis(stock_codes, task, analysis_mode)
         elif task_type == "monitor":
             # Monitor tasks are handled by MonitorService
             pass
 
         # Update last_run_at and compute next_run_at
         self._update_after_run(task["id"], task["schedule_config"])
+        return failed
 
-    async def _run_daily_analysis(self, stock_codes: list, task: dict, analysis_mode: str = "traditional"):
-        """Run analysis for a list of stocks with one retry for failures."""
+    async def _run_daily_analysis(self, stock_codes: list, task: dict, analysis_mode: str = "traditional") -> list[str]:
+        """Run analysis for a list of stocks with one retry for failures. Returns final failed codes."""
         from src.core.pipeline import run_analysis_pipeline
         from src.config import get_config
         config = get_config()
@@ -137,6 +154,7 @@ class SchedulerService:
         # Retry pass — one attempt for each failed stock
         if failed_codes:
             logger.info("Retrying %d failed stock(s) for task %d: %s", len(failed_codes), task["id"], failed_codes)
+            still_failed: list[str] = []
             for code in failed_codes:
                 try:
                     await asyncio.wait_for(
@@ -146,8 +164,41 @@ class SchedulerService:
                     logger.info("Retry succeeded for %s (task %d)", code, task["id"])
                 except asyncio.TimeoutError:
                     logger.warning("Retry timed out for %s (task %d), skipping until next cycle", code, task["id"])
+                    still_failed.append(code)
                 except Exception as e:
                     logger.warning("Retry failed for %s (task %d): %s, skipping until next cycle", code, task["id"], e)
+                    still_failed.append(code)
+            return still_failed
+
+        return []
+
+    def _set_run_status(self, task_id: int, status: str):
+        """Update run_status and run_started_at in DB."""
+        from src.storage import ScheduledTask
+        db = _get_db()
+        with db.get_session() as session:
+            task = session.get(ScheduledTask, task_id)
+            if task:
+                task.run_status = status
+                task.run_started_at = datetime.now() if status == 'running' else None
+                session.commit()
+
+    def _record_execution_result(self, task_id: int, error: Optional[str]):
+        """Update failure tracking fields after task execution."""
+        from src.storage import ScheduledTask
+        db = _get_db()
+        with db.get_session() as session:
+            task = session.get(ScheduledTask, task_id)
+            if not task:
+                return
+            if error:
+                task.failure_count = (task.failure_count or 0) + 1
+                task.consecutive_failures = (task.consecutive_failures or 0) + 1
+                task.last_error = error[:2000]  # truncate
+            else:
+                task.consecutive_failures = 0
+                task.last_error = None
+            session.commit()
 
     def _update_after_run(self, task_id: int, schedule_config: dict):
         """Update last_run_at and compute next_run_at."""
@@ -303,5 +354,9 @@ class SchedulerService:
             "is_active": t.is_active,
             "last_run_at": t.last_run_at.isoformat() if t.last_run_at else None,
             "next_run_at": t.next_run_at.isoformat() if t.next_run_at else None,
+            "run_status": getattr(t, 'run_status', 'idle') or 'idle',
+            "failure_count": getattr(t, 'failure_count', 0) or 0,
+            "consecutive_failures": getattr(t, 'consecutive_failures', 0) or 0,
+            "last_error": getattr(t, 'last_error', None),
             "created_at": t.created_at.isoformat() if t.created_at else None,
         }

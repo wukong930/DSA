@@ -12,6 +12,10 @@ export interface ScheduledTask {
   isActive: boolean;
   lastRunAt: string | null;
   nextRunAt: string | null;
+  runStatus: string;
+  failureCount: number;
+  consecutiveFailures: number;
+  lastError: string | null;
   createdAt: string | null;
 }
 

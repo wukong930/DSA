@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Brain, Calendar, Clock, Pause, Play, Plus, Repeat, Trash2, Zap } from 'lucide-react';
+import { AlertTriangle, Brain, Calendar, Clock, Loader2, Pause, Play, Plus, Repeat, Trash2, Zap } from 'lucide-react';
 import { useSchedulerStore } from '../stores/schedulerStore';
 import { AppPage, Card, Badge, StatusDot, EmptyState, ApiErrorAlert, ConfirmDialog, PageHeader } from '../components/common';
 
@@ -339,11 +339,20 @@ const SchedulePage: React.FC = () => {
                     </span>
                     <Badge variant={task.isActive ? 'success' : 'default'} size="sm">
                       <StatusDot tone={task.isActive ? 'success' : 'neutral'} className="mr-0.5" />
-                      {task.isActive ? '运行中' : '已暂停'}
+                      {task.runStatus === 'running' ? '执行中' : task.isActive ? '运行中' : '已暂停'}
                     </Badge>
                     <Badge variant={task.analysisMode === 'agent' ? 'warning' : 'info'} size="sm">
                       {task.analysisMode === 'agent' ? 'Agent 模式' : '传统模式'}
                     </Badge>
+                    {task.runStatus === 'running' && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan" />
+                    )}
+                    {task.consecutiveFailures > 0 && (
+                      <Badge variant="danger" size="sm">
+                        <AlertTriangle className="mr-0.5 h-3 w-3" />
+                        连续失败 {task.consecutiveFailures} 次
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Stock codes */}
@@ -361,7 +370,18 @@ const SchedulePage: React.FC = () => {
                     </span>
                     <span>下次运行: {formatTime(task.nextRunAt)}</span>
                     <span>上次运行: {formatTime(task.lastRunAt)}</span>
+                    {task.failureCount > 0 && (
+                      <span className="text-danger">累计失败: {task.failureCount} 次</span>
+                    )}
                   </div>
+
+                  {/* Last error */}
+                  {task.lastError && (
+                    <div className="mt-2 rounded-lg bg-danger/8 px-3 py-1.5 text-xs text-danger">
+                      <AlertTriangle className="mr-1 inline h-3 w-3" />
+                      {task.lastError}
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: actions */}

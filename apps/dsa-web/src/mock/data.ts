@@ -247,6 +247,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     isActive: true,
     lastRunAt: '2026-04-04T08:30:00',
     nextRunAt: '2026-04-07T08:30:00',
+    runStatus: 'idle', failureCount: 0, consecutiveFailures: 0, lastError: null,
     createdAt: '2026-02-01T10:00:00',
   },
   {
@@ -257,6 +258,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     isActive: true,
     lastRunAt: '2026-04-03T22:00:00',
     nextRunAt: '2026-04-04T22:00:00',
+    runStatus: 'idle', failureCount: 2, consecutiveFailures: 1, lastError: 'Failed stocks: NVDA',
     createdAt: '2026-03-01T20:00:00',
   },
   {
@@ -267,6 +269,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     isActive: true,
     lastRunAt: '2026-04-04T09:00:00',
     nextRunAt: '2026-04-07T09:00:00',
+    runStatus: 'running', failureCount: 0, consecutiveFailures: 0, lastError: null,
     createdAt: '2026-03-10T11:00:00',
   },
   {
@@ -277,6 +280,7 @@ export const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
     isActive: false,
     lastRunAt: '2026-04-02T14:00:00',
     nextRunAt: null,
+    runStatus: 'idle', failureCount: 5, consecutiveFailures: 3, lastError: 'LLM connection timeout',
     createdAt: '2026-03-20T09:00:00',
   },
 ];

@@ -700,6 +700,11 @@ class ScheduledTask(Base):
     analysis_mode = Column(String(16), nullable=False, default='traditional')  # traditional / agent
     last_run_at = Column(DateTime, nullable=True)
     next_run_at = Column(DateTime, nullable=True)
+    run_status = Column(String(16), nullable=False, default='idle')  # idle / running
+    run_started_at = Column(DateTime, nullable=True)
+    failure_count = Column(Integer, nullable=False, default=0)
+    consecutive_failures = Column(Integer, nullable=False, default=0)
+    last_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -797,6 +802,11 @@ class DatabaseManager:
         migrations = [
             ('scheduled_tasks', 'analysis_mode', "VARCHAR(16) NOT NULL DEFAULT 'traditional'"),
             ('scheduled_tasks', 'name', "VARCHAR(128) DEFAULT NULL"),
+            ('scheduled_tasks', 'run_status', "VARCHAR(16) NOT NULL DEFAULT 'idle'"),
+            ('scheduled_tasks', 'run_started_at', "DATETIME DEFAULT NULL"),
+            ('scheduled_tasks', 'failure_count', "INTEGER NOT NULL DEFAULT 0"),
+            ('scheduled_tasks', 'consecutive_failures', "INTEGER NOT NULL DEFAULT 0"),
+            ('scheduled_tasks', 'last_error', "TEXT DEFAULT NULL"),
         ]
         for table, column, col_def in migrations:
             if table in inspector.get_table_names():

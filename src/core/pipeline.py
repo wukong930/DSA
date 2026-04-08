@@ -333,21 +333,8 @@ class StockAnalysisPipeline:
                 except Exception as e:
                     logger.warning(f"{stock_name}({code}) 时序预测失败: {e}")
 
-            if use_agent:
-                logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
-                return self._analyze_with_agent(
-                    code,
-                    report_type,
-                    query_id,
-                    stock_name,
-                    realtime_quote,
-                    chip_data,
-                    fundamental_context,
-                    trend_result,
-                    forecast_result,
-                )
-
             # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
+            # Runs before agent/traditional branch so both paths share the results
             news_context = None
             if self.search_service.is_available:
                 logger.info(f"{stock_name}({code}) 开始多维度情报搜索...")
@@ -399,6 +386,21 @@ class StockAnalysisPipeline:
                 except Exception as e:
                     logger.warning(f"{stock_name}({code}) Social sentiment fetch failed: {e}")
 
+            if use_agent:
+                logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
+                return self._analyze_with_agent(
+                    code,
+                    report_type,
+                    query_id,
+                    stock_name,
+                    realtime_quote,
+                    chip_data,
+                    fundamental_context,
+                    trend_result,
+                    forecast_result,
+                    news_context,
+                )
+
             # Step 5: 获取分析上下文（技术面数据）
             context = self.db.get_analysis_context(code)
 
@@ -417,7 +419,7 @@ class StockAnalysisPipeline:
             technical_indicators = None
             try:
                 from src.services.ta_indicator_service import TAIndicatorService
-                ta_df = self.db.get_daily_data(code, limit=90)
+                ta_df, _ta_source = self.fetcher_manager.get_daily_data(code, days=90)
                 if ta_df is not None and len(ta_df) >= 20:
                     ta_service = TAIndicatorService()
                     result_df = ta_service.compute_all(ta_df)
@@ -723,6 +725,7 @@ class StockAnalysisPipeline:
         fundamental_context: Optional[Dict[str, Any]] = None,
         trend_result: Optional[TrendAnalysisResult] = None,
         forecast_result=None,
+        news_context: Optional[str] = None,
     ) -> Optional[AnalysisResult]:
         """
         使用 Agent 模式分析单只股票。
@@ -756,7 +759,7 @@ class StockAnalysisPipeline:
             # to call get_technical_indicators tool (saves 1-3 ReAct rounds)
             try:
                 from src.services.ta_indicator_service import TAIndicatorService
-                ta_df = self.db.get_daily_data(code, limit=90)
+                ta_df, ta_source = self.fetcher_manager.get_daily_data(code, days=90)
                 if ta_df is not None and len(ta_df) >= 20:
                     ta_service = TAIndicatorService()
                     result_df = ta_service.compute_all(ta_df)
@@ -767,24 +770,25 @@ class StockAnalysisPipeline:
                         "signals": ta_service.get_signals(result_df),
                     }
                     logger.info(f"{stock_name}({code}) 技术指标预计算完成（{len(result_df)} 数据点）")
+
+                    # Inject daily_history for tool cache hit (not injected into LLM prompt)
+                    hist_rows = ta_df.tail(60)
+                    records = hist_rows.to_dict(orient="records")
+                    for r in records:
+                        if "date" in r:
+                            r["date"] = str(r["date"])
+                    initial_context["daily_history"] = {
+                        "code": code,
+                        "source": ta_source if isinstance(ta_source, str) else str(ta_source),
+                        "total_records": len(records),
+                        "data": records,
+                    }
             except Exception as e:
                 logger.warning(f"[{code}] 技术指标预计算失败（agent 仍可通过 tool 调用）: {e}")
 
-            # Agent path: inject social sentiment as news_context so both
-            # executor (_build_user_message) and orchestrator (ctx.set_data)
-            # can consume it through the existing news_context channel
-            if self.social_sentiment_service.is_available and is_us_stock_code(code):
-                try:
-                    social_context = self.social_sentiment_service.get_social_context(code)
-                    if social_context:
-                        existing = initial_context.get("news_context")
-                        if existing:
-                            initial_context["news_context"] = existing + "\n\n" + social_context
-                        else:
-                            initial_context["news_context"] = social_context
-                        logger.info(f"[{code}] Agent mode: social sentiment data injected into news_context")
-                except Exception as e:
-                    logger.warning(f"[{code}] Agent mode: social sentiment fetch failed: {e}")
+            # Inject news_context from Step 4 (comprehensive intel + social sentiment)
+            if news_context:
+                initial_context["news_context"] = news_context
 
             # 运行 Agent
             if report_language == "en":

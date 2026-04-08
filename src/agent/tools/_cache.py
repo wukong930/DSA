@@ -23,8 +23,11 @@ Usage in tool handlers::
         ...  # normal fetch
 """
 
+import logging
 import threading
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 # {canonical_stock_code: {data_key: value, ...}}
@@ -48,6 +51,7 @@ def set_tool_context(data: dict) -> None:
         return
     code = _canonical(str(data.get("stock_code", "")))
     if not code:
+        logger.warning("set_tool_context: skipped — data has no stock_code (keys: %s)", list(data.keys())[:10])
         return
     with _lock:
         _cache_store[code] = dict(data)

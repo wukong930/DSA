@@ -18,6 +18,7 @@ import logging
 import re
 from contextlib import contextmanager
 from typing import Optional, Generator, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 import pandas as pd
 from tenacity import (
@@ -119,6 +120,10 @@ class PytdxFetcher(BaseFetcher):
     ]
     # Pytdx get_security_list returns at most 1000 items per page
     SECURITY_LIST_PAGE_SIZE = 1000
+    # Maximum number of hosts to try before giving up
+    MAX_HOST_ATTEMPTS = 3
+    # Overall timeout (seconds) for a single pytdx session (connect + query)
+    SESSION_TIMEOUT = 30
     
     def __init__(self, hosts: Optional[List[Tuple[str, int]]] = None):
         """
@@ -175,8 +180,9 @@ class PytdxFetcher(BaseFetcher):
         connected = False
         
         try:
-            # 尝试连接服务器（自动选择最优）
-            for i in range(len(self._hosts)):
+            # 尝试连接服务器（最多尝试 MAX_HOST_ATTEMPTS 个）
+            attempts = min(len(self._hosts), self.MAX_HOST_ATTEMPTS)
+            for i in range(attempts):
                 host_idx = (self._current_host_idx + i) % len(self._hosts)
                 host, port = self._hosts[host_idx]
                 
@@ -286,44 +292,46 @@ class PytdxFetcher(BaseFetcher):
             )
         
         market, code = self._get_market_code(stock_code)
-        
+
         # 计算需要获取的交易日数量（估算）
         from datetime import datetime as dt
         start_dt = dt.strptime(start_date, '%Y-%m-%d')
         end_dt = dt.strptime(end_date, '%Y-%m-%d')
         days = (end_dt - start_dt).days
         count = min(max(days * 5 // 7 + 10, 30), 800)  # 估算交易日，最大 800 条
-        
+
         logger.debug(f"调用 Pytdx get_security_bars(market={market}, code={code}, count={count})")
-        
-        with self._pytdx_session() as api:
-            try:
-                # 获取日 K 线数据
-                # category: 9-日线, 0-5分钟, 1-15分钟, 2-30分钟, 3-1小时
-                data = api.get_security_bars(
-                    category=9,  # 日线
-                    market=market,
-                    code=code,
-                    start=0,  # 从最新开始
-                    count=count
-                )
-                
-                if data is None or len(data) == 0:
-                    raise DataFetchError(f"Pytdx 未查询到 {stock_code} 的数据")
-                
-                # 转换为 DataFrame
-                df = api.to_df(data)
-                
-                # 过滤日期范围
-                df['datetime'] = pd.to_datetime(df['datetime'])
-                df = df[(df['datetime'] >= start_date) & (df['datetime'] <= end_date)]
-                
-                return df
-                
-            except Exception as e:
-                if isinstance(e, DataFetchError):
-                    raise
-                raise DataFetchError(f"Pytdx 获取数据失败: {e}") from e
+
+        def _query():
+            with self._pytdx_session() as api:
+                try:
+                    data = api.get_security_bars(
+                        category=9,
+                        market=market,
+                        code=code,
+                        start=0,
+                        count=count
+                    )
+
+                    if data is None or len(data) == 0:
+                        raise DataFetchError(f"Pytdx 未查询到 {stock_code} 的数据")
+
+                    df = api.to_df(data)
+                    df['datetime'] = pd.to_datetime(df['datetime'])
+                    df = df[(df['datetime'] >= start_date) & (df['datetime'] <= end_date)]
+                    return df
+
+                except Exception as e:
+                    if isinstance(e, DataFetchError):
+                        raise
+                    raise DataFetchError(f"Pytdx 获取数据失败: {e}") from e
+
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_query)
+                return future.result(timeout=self.SESSION_TIMEOUT)
+        except FuturesTimeoutError:
+            raise DataFetchError(f"Pytdx 获取 {stock_code} 数据超时 (>{self.SESSION_TIMEOUT}s)")
     
     def _normalize_data(self, df: pd.DataFrame, stock_code: str) -> pd.DataFrame:
         """
@@ -363,10 +371,10 @@ class PytdxFetcher(BaseFetcher):
     def get_stock_name(self, stock_code: str) -> Optional[str]:
         """
         获取股票名称
-        
+
         Args:
             stock_code: 股票代码
-            
+
         Returns:
             股票名称，失败返回 None
         """
@@ -377,31 +385,44 @@ class PytdxFetcher(BaseFetcher):
         # 先检查缓存
         if stock_code in self._stock_name_cache:
             return self._stock_name_cache[stock_code]
-        
+
         try:
-            market, code = self._get_market_code(stock_code)
-            
-            with self._pytdx_session() as api:
-                # 获取股票列表（缓存）
-                if self._stock_list_cache is None:
-                    self._build_stock_list_cache(api)
-                
-                # 查找股票名称
-                name = self._stock_list_cache.get(code)
-                if name:
-                    self._stock_name_cache[stock_code] = name
-                    return name
-                
-                # 尝试使用 get_finance_info
-                finance_info = api.get_finance_info(market, code)
-                if finance_info and 'name' in finance_info:
-                    name = finance_info['name']
-                    self._stock_name_cache[stock_code] = name
-                    return name
-                
+            return self._get_stock_name_with_timeout(stock_code)
+        except (FuturesTimeoutError, TimeoutError):
+            logger.warning(f"Pytdx 获取股票名称超时 {stock_code} (>{self.SESSION_TIMEOUT}s)")
         except Exception as e:
             logger.warning(f"Pytdx 获取股票名称失败 {stock_code}: {e}")
-        
+
+        return None
+
+    def _get_stock_name_with_timeout(self, stock_code: str) -> Optional[str]:
+        """Inner method that runs in a thread with SESSION_TIMEOUT."""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(self._get_stock_name_sync, stock_code)
+            return future.result(timeout=self.SESSION_TIMEOUT)
+
+    def _get_stock_name_sync(self, stock_code: str) -> Optional[str]:
+        """Synchronous stock name lookup — may block on network I/O."""
+        market, code = self._get_market_code(stock_code)
+
+        with self._pytdx_session() as api:
+            # 获取股票列表（缓存）
+            if self._stock_list_cache is None:
+                self._build_stock_list_cache(api)
+
+            # 查找股票名称
+            name = self._stock_list_cache.get(code)
+            if name:
+                self._stock_name_cache[stock_code] = name
+                return name
+
+            # 尝试使用 get_finance_info
+            finance_info = api.get_finance_info(market, code)
+            if finance_info and 'name' in finance_info:
+                name = finance_info['name']
+                self._stock_name_cache[stock_code] = name
+                return name
+
         return None
     
     def get_realtime_quote(self, stock_code: str) -> Optional[dict]:
@@ -420,25 +441,33 @@ class PytdxFetcher(BaseFetcher):
             )
         try:
             market, code = self._get_market_code(stock_code)
-            
-            with self._pytdx_session() as api:
-                data = api.get_security_quotes([(market, code)])
-                
-                if data and len(data) > 0:
-                    quote = data[0]
-                    return {
-                        'code': stock_code,
-                        'name': quote.get('name', ''),
-                        'price': quote.get('price', 0),
-                        'open': quote.get('open', 0),
-                        'high': quote.get('high', 0),
-                        'low': quote.get('low', 0),
-                        'pre_close': quote.get('last_close', 0),
-                        'volume': quote.get('vol', 0),
-                        'amount': quote.get('amount', 0),
-                        'bid_prices': [quote.get(f'bid{i}', 0) for i in range(1, 6)],
-                        'ask_prices': [quote.get(f'ask{i}', 0) for i in range(1, 6)],
-                    }
+
+            def _query():
+                with self._pytdx_session() as api:
+                    data = api.get_security_quotes([(market, code)])
+
+                    if data and len(data) > 0:
+                        quote = data[0]
+                        return {
+                            'code': stock_code,
+                            'name': quote.get('name', ''),
+                            'price': quote.get('price', 0),
+                            'open': quote.get('open', 0),
+                            'high': quote.get('high', 0),
+                            'low': quote.get('low', 0),
+                            'pre_close': quote.get('last_close', 0),
+                            'volume': quote.get('vol', 0),
+                            'amount': quote.get('amount', 0),
+                            'bid_prices': [quote.get(f'bid{i}', 0) for i in range(1, 6)],
+                            'ask_prices': [quote.get(f'ask{i}', 0) for i in range(1, 6)],
+                        }
+                return None
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_query)
+                return future.result(timeout=self.SESSION_TIMEOUT)
+        except FuturesTimeoutError:
+            logger.warning(f"Pytdx 获取实时行情超时 {stock_code} (>{self.SESSION_TIMEOUT}s)")
         except Exception as e:
             logger.warning(f"Pytdx 获取实时行情失败 {stock_code}: {e}")
         

@@ -24,6 +24,7 @@ import {
 } from '../utils/chatFollowUp';
 import { isNearBottom } from '../utils/chatScroll';
 import { getReportText } from '../utils/reportLanguage';
+import { USE_MOCK, MOCK_CHAT_SKILLS } from '../mock/data';
 
 // Quick question examples shown on empty state
 const QUICK_QUESTIONS = [
@@ -167,6 +168,11 @@ const ChatPage: React.FC = () => {
   }, [loadInitialSession]);
 
   useEffect(() => {
+    if (USE_MOCK) {
+      setSkills(MOCK_CHAT_SKILLS);
+      setSelectedSkill(MOCK_CHAT_SKILLS[0]?.id || '');
+      return;
+    }
     agentApi.getSkills()
       .then((res) => {
         setSkills(res.skills);

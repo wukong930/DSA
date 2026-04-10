@@ -7,6 +7,7 @@ import type {
   SystemConfigItem,
   SystemConfigUpdateItem,
 } from '../types/systemConfig';
+import { USE_MOCK, MOCK_SYSTEM_CONFIG_ITEMS } from '../mock/data';
 
 type ToastState = {
   type: 'success';
@@ -215,6 +216,10 @@ export function useSystemConfig() {
   );
 
   const load = useCallback(async (): Promise<boolean> => {
+    if (USE_MOCK) {
+      applyServerPayload(MOCK_SYSTEM_CONFIG_ITEMS, 'mock-v1', '******');
+      return true;
+    }
     setIsLoading(true);
     setLoadError(null);
     setRetryAction(null);

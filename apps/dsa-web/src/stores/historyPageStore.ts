@@ -3,7 +3,7 @@ import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
 import { historyApi } from '../api/history';
 import type { AnalysisReport, HistoryItem, HistoryListResponse, HistoryGroupItem } from '../types/analysis';
-import { USE_MOCK, MOCK_HISTORY_ITEMS, MOCK_REPORT_MAOTAI } from '../mock/data';
+import { USE_MOCK, MOCK_HISTORY_ITEMS, MOCK_REPORT_MAOTAI, MOCK_HISTORY_GROUPS, MOCK_REPORTS_MAP } from '../mock/data';
 
 const PAGE_SIZE = 20;
 
@@ -132,13 +132,7 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
 
   loadInitialHistory: async () => {
     if (USE_MOCK) {
-      set({
-        historyItems: [...MOCK_HISTORY_ITEMS],
-        hasMore: false,
-        isLoadingHistory: false,
-        selectedReport: MOCK_REPORT_MAOTAI,
-        isLoadingReport: false,
-      });
+      await get().loadGroups();
       return;
     }
     await get().loadGroups();
@@ -153,7 +147,13 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
 
   selectHistoryItem: async (recordId) => {
     if (USE_MOCK) {
-      set({ selectedReport: MOCK_REPORT_MAOTAI, isLoadingReport: false });
+      const item = MOCK_HISTORY_ITEMS.find((h) => h.id === recordId);
+      const report = item ? MOCK_REPORTS_MAP[item.stockCode] : MOCK_REPORT_MAOTAI;
+      if (report && item) {
+        set({ selectedReport: { ...report, meta: { ...report.meta, id: item.id, queryId: item.queryId, createdAt: item.createdAt } }, isLoadingReport: false });
+      } else {
+        set({ selectedReport: MOCK_REPORT_MAOTAI, isLoadingReport: false });
+      }
       return;
     }
     const requestId = ++reportRequestSeq;
@@ -243,6 +243,17 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
 
   // Grouped view actions
   loadGroups: async () => {
+    if (USE_MOCK) {
+      const code = get().filterStockCode.trim();
+      const groups = code
+        ? MOCK_HISTORY_GROUPS.filter((g) => g.stockCode.includes(code))
+        : [...MOCK_HISTORY_GROUPS];
+      set({ groups, groupSubItems: {}, expandedGroups: new Set<string>(), isLoadingGroups: false });
+      if (groups.length > 0 && !get().selectedReport) {
+        await get().selectHistoryItem(groups[0].latestId);
+      }
+      return;
+    }
     set({ isLoadingGroups: true });
     try {
       const code = get().filterStockCode.trim();
@@ -278,6 +289,11 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
 
     // Load sub-items if not cached
     if (!get().groupSubItems[stockCode]) {
+      if (USE_MOCK) {
+        const items = MOCK_HISTORY_ITEMS.filter((h) => h.stockCode === stockCode);
+        set({ groupSubItems: { ...get().groupSubItems, [stockCode]: items } });
+        return;
+      }
       set({
         isLoadingGroupItems: { ...get().isLoadingGroupItems, [stockCode]: true },
       });

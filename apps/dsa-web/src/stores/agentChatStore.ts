@@ -9,6 +9,7 @@ import {
   type ParsedApiError,
 } from '../api/error';
 import { generateUUID } from '../utils/uuid';
+import { USE_MOCK, MOCK_CHAT_SESSIONS } from '../mock/data';
 
 const STORAGE_KEY_SESSION = 'dsa_chat_session_id';
 
@@ -83,6 +84,10 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
   clearCompletionBadge: () => set({ completionBadge: false }),
 
   loadSessions: async () => {
+    if (USE_MOCK) {
+      set({ sessions: [...MOCK_CHAT_SESSIONS], sessionsLoading: false });
+      return;
+    }
     set({ sessionsLoading: true });
     try {
       const sessions = await agentApi.getChatSessions();
@@ -97,6 +102,11 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
   loadInitialSession: async () => {
     const { hasInitialLoad } = get();
     if (hasInitialLoad) return;
+    if (USE_MOCK) {
+      set({ hasInitialLoad: true });
+      await get().loadSessions();
+      return;
+    }
     set({ hasInitialLoad: true, sessionsLoading: true });
 
     try {

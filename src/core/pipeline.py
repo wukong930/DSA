@@ -322,11 +322,9 @@ class StockAnalysisPipeline:
                     fc_bars = self.db.get_data_range(code, start_date_fc, end_date_fc)
                     if fc_bars and len(fc_bars) >= 30:
                         fc_df = pd.DataFrame([bar.to_dict() for bar in fc_bars])
-                        covariate_cols = getattr(self.config, 'forecast_covariate_cols', None)
                         forecast_result = self.forecast_service.forecast(
                             fc_df, code,
                             horizon_days=self.config.forecast_horizon_days,
-                            covariate_cols=covariate_cols,
                         )
                     else:
                         logger.info(f"{stock_name}({code}) 历史数据不足，跳过时序预测")
@@ -1339,11 +1337,9 @@ class StockAnalysisPipeline:
                         fc_df = pd.DataFrame([bar.to_dict() for bar in fc_bars])
                         batch_stocks.append((fc_df, code))
                 if batch_stocks:
-                    covariate_cols = getattr(self.config, 'forecast_covariate_cols', None)
                     batch_forecasts = self.forecast_service.forecast_batch(
                         batch_stocks,
                         horizon_days=self.config.forecast_horizon_days,
-                        covariate_cols=covariate_cols,
                     )
                     logger.info(f"批量时序预测完成: {len(batch_forecasts)} 只股票")
             except Exception as e:

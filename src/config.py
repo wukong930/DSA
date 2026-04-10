@@ -671,6 +671,7 @@ class Config:
     # TimesFM 时序预测开关（需要额外安装 timesfm + torch，内存需求 ~1GB）
     enable_forecast: bool = False
     forecast_horizon_days: int = 5
+    forecast_batch_enabled: bool = True
     # 东财接口补丁开关
     enable_eastmoney_patch: bool = False
     # 实时行情数据源优先级（逗号分隔）
@@ -1303,6 +1304,7 @@ class Config:
             enable_chip_distribution=os.getenv('ENABLE_CHIP_DISTRIBUTION', 'true').lower() == 'true',
             enable_forecast=os.getenv('ENABLE_FORECAST', 'false').lower() == 'true',
             forecast_horizon_days=int(os.getenv('FORECAST_HORIZON_DAYS', '5')),
+            forecast_batch_enabled=os.getenv('FORECAST_BATCH_ENABLED', 'true').lower() == 'true',
             # 东财接口补丁开关
             enable_eastmoney_patch=os.getenv('ENABLE_EASTMONEY_PATCH', 'false').lower() == 'true',
             # 实时行情数据源优先级：

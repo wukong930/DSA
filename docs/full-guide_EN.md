@@ -288,8 +288,8 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/ZhuLinsen/daily_stock_analysis.git
-cd daily_stock_analysis
+git clone https://github.com/wukong930/DSA.git
+cd DSA
 
 # 2. Configure environment variables
 cp .env.example .env
@@ -817,4 +817,4 @@ A: Check if Actions is enabled, and if cron expression is correct (note it's UTC
 
 ---
 
-For more questions, please [submit an Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
+For more questions, please [submit an Issue](https://github.com/wukong930/DSA/issues)

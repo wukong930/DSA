@@ -254,4 +254,4 @@ ADMIN_AUTH_ENABLED=true
 
 ---
 
-遇到其他问题？欢迎 [提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)。
+遇到其他问题？欢迎 [提交 Issue](https://github.com/wukong930/DSA/issues)。

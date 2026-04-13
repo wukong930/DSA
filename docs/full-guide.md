@@ -311,8 +311,8 @@ Dockerfile 使用多阶段构建，前端会在构建镜像时自动打包并内
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/ZhuLinsen/daily_stock_analysis.git
-cd daily_stock_analysis
+git clone https://github.com/wukong930/DSA.git
+cd DSA
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -963,7 +963,7 @@ A: 检查是否启用了 Actions，以及 cron 表达式是否正确（注意是
 
 ---
 
-更多问题请 [提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
+更多问题请 [提交 Issue](https://github.com/wukong930/DSA/issues)
 
 ## Portfolio P0 PR1 (Core Ledger and Snapshot)
 

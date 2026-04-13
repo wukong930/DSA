@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, BarChart3, BriefcaseBusiness, Clock, FileText, Home, LogOut, MessageSquareQuote, Settings2, Star } from 'lucide-react';
+import { Activity, BarChart3, BriefcaseBusiness, Clock, FileText, Home, LogOut, MessageSquareQuote, Settings2, Star, TrendingUp } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAgentChatStore } from '../../stores/agentChatStore';
@@ -31,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'schedule', label: '定时任务', to: '/schedule', icon: Clock },
   { key: 'history', label: '历史报告', to: '/history', icon: FileText },
   { key: 'backtest', label: '回测', to: '/backtest', icon: BarChart3 },
+  { key: 'strategy-bt', label: '策略回测', to: '/strategy-backtest', icon: TrendingUp },
   { key: 'settings', label: '设置', to: '/settings', icon: Settings2 },
 ];
 

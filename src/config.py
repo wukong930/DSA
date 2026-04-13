@@ -532,6 +532,24 @@ class Config:
     agent_event_monitor_interval_minutes: int = 5  # Polling interval for event monitor background checks
     agent_event_alert_rules_json: str = ""  # JSON array of serialized EventMonitor rules
 
+    # --- Batch analysis memory control (Layer 3) ---
+    analysis_batch_size: int = 20           # Stocks per batch before GC
+    analysis_gc_between_batches: bool = True  # Force gc.collect() between batches
+    analysis_memory_log_enabled: bool = True  # Log RSS after each batch
+
+    # --- Subprocess isolation (Layer 4) ---
+    analysis_subprocess_enabled: bool = False  # Run analysis in child process (OOM isolation)
+    analysis_subprocess_timeout_s: int = 1200  # Per-subprocess timeout (seconds)
+
+    # --- Strategy Backtest ---
+    strategy_bt_enabled: bool = False
+    strategy_bt_data_dir: str = "./data/external"
+    strategy_bt_runtime_mode: str = "auto"  # auto / lite / full
+    strategy_bt_gpu_enabled: bool = False   # cuDF acceleration (NVIDIA GPU)
+    strategy_bt_max_workers: int = 4
+    strategy_bt_timeout: int = 600          # backtest timeout in seconds
+    strategy_bt_max_concurrent_per_user: int = 5  # max concurrent runs per user
+
     # === 通知配置（可同时配置多个，全部推送）===
     
     # 企业微信 Webhook
@@ -1183,6 +1201,17 @@ class Config:
                 minimum=1,
             ),
             agent_event_alert_rules_json=os.getenv('AGENT_EVENT_ALERT_RULES_JSON', ''),
+            analysis_batch_size=parse_env_int(
+                os.getenv('ANALYSIS_BATCH_SIZE'), 20,
+                field_name='ANALYSIS_BATCH_SIZE', minimum=1,
+            ),
+            analysis_gc_between_batches=os.getenv('ANALYSIS_GC_BETWEEN_BATCHES', 'true').lower() == 'true',
+            analysis_memory_log_enabled=os.getenv('ANALYSIS_MEMORY_LOG_ENABLED', 'true').lower() == 'true',
+            analysis_subprocess_enabled=os.getenv('ANALYSIS_SUBPROCESS_ENABLED', 'false').lower() == 'true',
+            analysis_subprocess_timeout_s=parse_env_int(
+                os.getenv('ANALYSIS_SUBPROCESS_TIMEOUT_S'), 1200,
+                field_name='ANALYSIS_SUBPROCESS_TIMEOUT_S', minimum=60,
+            ),
             wechat_webhook_url=os.getenv('WECHAT_WEBHOOK_URL'),
             feishu_webhook_url=os.getenv('FEISHU_WEBHOOK_URL'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN'),
@@ -1371,7 +1400,24 @@ class Config:
                 field_name='PORTFOLIO_RISK_LOOKBACK_DAYS',
                 minimum=1,
             ),
-            portfolio_fx_update_enabled=os.getenv('PORTFOLIO_FX_UPDATE_ENABLED', 'true').lower() == 'true'
+            portfolio_fx_update_enabled=os.getenv('PORTFOLIO_FX_UPDATE_ENABLED', 'true').lower() == 'true',
+            # Strategy Backtest
+            strategy_bt_enabled=os.getenv('STRATEGY_BT_ENABLED', 'false').lower() == 'true',
+            strategy_bt_data_dir=os.getenv('STRATEGY_BT_DATA_DIR', './data/external'),
+            strategy_bt_runtime_mode=os.getenv('STRATEGY_BT_RUNTIME_MODE', 'auto'),
+            strategy_bt_gpu_enabled=os.getenv('STRATEGY_BT_GPU_ENABLED', 'false').lower() == 'true',
+            strategy_bt_max_workers=parse_env_int(
+                os.getenv('STRATEGY_BT_MAX_WORKERS'), 4,
+                field_name='STRATEGY_BT_MAX_WORKERS', minimum=1, maximum=32,
+            ),
+            strategy_bt_timeout=parse_env_int(
+                os.getenv('STRATEGY_BT_TIMEOUT'), 600,
+                field_name='STRATEGY_BT_TIMEOUT', minimum=60, maximum=7200,
+            ),
+            strategy_bt_max_concurrent_per_user=parse_env_int(
+                os.getenv('STRATEGY_BT_MAX_CONCURRENT_PER_USER'), 5,
+                field_name='STRATEGY_BT_MAX_CONCURRENT_PER_USER', minimum=1, maximum=50,
+            ),
         )
     
     @classmethod

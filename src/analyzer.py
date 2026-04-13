@@ -13,6 +13,7 @@ A股自选股智能分析系统 - AI分析层
 import json
 import logging
 import math
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Tuple
@@ -2086,10 +2087,28 @@ if __name__ == "__main__":
     }
     
     analyzer = GeminiAnalyzer()
-    
+
     if analyzer.is_available():
         print("=== AI 分析测试 ===")
         result = analyzer.analyze(test_context)
         print(f"分析结果: {result.to_dict()}")
     else:
         print("Gemini API 未配置，跳过测试")
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton
+# ---------------------------------------------------------------------------
+
+_analyzer_instance: Optional[GeminiAnalyzer] = None
+_analyzer_lock = threading.Lock()
+
+
+def get_shared_analyzer(config: Optional[Config] = None) -> GeminiAnalyzer:
+    """Thread-safe singleton accessor for GeminiAnalyzer."""
+    global _analyzer_instance
+    if _analyzer_instance is None:
+        with _analyzer_lock:
+            if _analyzer_instance is None:
+                _analyzer_instance = GeminiAnalyzer(config=config)
+    return _analyzer_instance

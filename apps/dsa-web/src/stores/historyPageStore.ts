@@ -45,6 +45,8 @@ export interface HistoryPageState {
   // Grouped view actions
   loadGroups: () => Promise<void>;
   toggleGroup: (stockCode: string) => Promise<void>;
+  toggleGroupSelection: (stockCode: string) => void;
+  deleteAllHistory: () => Promise<void>;
 }
 
 async function fetchHistory(
@@ -309,6 +311,40 @@ export const useHistoryPageStore = create<HistoryPageState>((set, get) => ({
           isLoadingGroupItems: { ...get().isLoadingGroupItems, [stockCode]: false },
         });
       }
+    }
+  },
+
+  toggleGroupSelection: (stockCode: string) => {
+    const subItems = get().groupSubItems[stockCode];
+    if (!subItems || subItems.length === 0) return;
+
+    const groupIds = subItems.map((item) => item.id);
+    const selected = new Set(get().selectedHistoryIds);
+    const allSelected = groupIds.every((id) => selected.has(id));
+
+    if (allSelected) {
+      groupIds.forEach((id) => selected.delete(id));
+    } else {
+      groupIds.forEach((id) => selected.add(id));
+    }
+    set({ selectedHistoryIds: Array.from(selected) });
+  },
+
+  deleteAllHistory: async () => {
+    if (get().isDeletingHistory) return;
+    set({ isDeletingHistory: true });
+    try {
+      if (USE_MOCK) {
+        set({ historyItems: [], groups: [], groupSubItems: {}, expandedGroups: new Set<string>(), selectedHistoryIds: [], selectedReport: null });
+        return;
+      }
+      await historyApi.deleteAll();
+      set({ selectedHistoryIds: [], selectedReport: null });
+      await get().loadGroups();
+    } catch (error) {
+      set({ error: getParsedApiError(error) });
+    } finally {
+      set({ isDeletingHistory: false });
     }
   },
 }));

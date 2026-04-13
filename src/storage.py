@@ -392,6 +392,76 @@ class BacktestSummary(Base):
     )
 
 
+class StrategyBacktestRun(Base):
+    """Strategy backtest run record."""
+
+    __tablename__ = 'strategy_backtest_runs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, default=0, index=True)
+
+    # Configuration
+    strategy_name = Column(String(64), nullable=False)
+    strategy_params = Column(Text)          # JSON
+    codes = Column(Text, nullable=False)    # JSON array
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    freq = Column(String(8), default='1d')
+    initial_cash = Column(Float, default=1000000)
+    commission = Column(Float, default=0.001)
+    benchmark = Column(String(16), default='000300')
+
+    # Status
+    status = Column(String(16), default='pending', index=True)  # pending/running/completed/failed
+    progress = Column(String(64))  # progress text for running state
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    error_message = Column(Text)
+
+    # Full result (JSON BacktestReport)
+    result_json = Column(Text)
+
+    # Denormalized key metrics for list/sort
+    total_return_pct = Column(Float)
+    sharpe_ratio = Column(Float)
+    max_drawdown_pct = Column(Float)
+    win_rate_pct = Column(Float)
+    total_trades = Column(Integer)
+
+    slippage = Column(Float, default=0.001)
+
+    created_at = Column(DateTime, default=datetime.now)
+
+    __table_args__ = (
+        Index('ix_sbt_user_created', 'user_id', 'created_at'),
+    )
+
+
+class CustomExpressionFactor(Base):
+    """Persisted custom expression factor."""
+
+    __tablename__ = 'custom_expression_factors'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(64), nullable=False, unique=True)
+    expression = Column(Text, nullable=False)
+    description = Column(Text, default='')
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class CustomExpressionStrategy(Base):
+    """Persisted custom expression strategy."""
+
+    __tablename__ = 'custom_expression_strategies'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(64), nullable=False, unique=True)
+    buy_expression = Column(Text, nullable=False)
+    sell_expression = Column(Text, nullable=False)
+    description = Column(Text, default='')
+    created_at = Column(DateTime, default=datetime.now)
+
+
 class PortfolioAccount(Base):
     """Portfolio account metadata."""
 
@@ -807,6 +877,9 @@ class DatabaseManager:
             ('scheduled_tasks', 'failure_count', "INTEGER NOT NULL DEFAULT 0"),
             ('scheduled_tasks', 'consecutive_failures', "INTEGER NOT NULL DEFAULT 0"),
             ('scheduled_tasks', 'last_error', "TEXT DEFAULT NULL"),
+            ('strategy_backtest_runs', 'slippage', "FLOAT DEFAULT 0.001"),
+            ('strategy_backtest_runs', 'progress', "VARCHAR(64) DEFAULT NULL"),
+            ('strategy_backtest_runs', 'warnings', "TEXT DEFAULT NULL"),
         ]
         for table, column, col_def in migrations:
             if table in inspector.get_table_names():
@@ -1382,6 +1455,13 @@ class DatabaseManager:
             result = session.execute(
                 delete(AnalysisHistory).where(AnalysisHistory.id.in_(ids))
             )
+            return result.rowcount or 0
+
+    def delete_all_analysis_history(self) -> int:
+        """删除所有分析历史记录及关联的回测结果。"""
+        with self.session_scope() as session:
+            session.execute(delete(BacktestResult))
+            result = session.execute(delete(AnalysisHistory))
             return result.rowcount or 0
 
     def get_latest_analysis_by_query_id(self, query_id: str) -> Optional[AnalysisHistory]:

@@ -223,6 +223,35 @@ def delete_history_records(
         )
 
 
+@router.delete(
+    "/all",
+    response_model=DeleteHistoryResponse,
+    responses={
+        200: {"description": "删除成功"},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="删除全部历史分析记录",
+    description="清空所有分析历史记录及关联的回测结果"
+)
+def delete_all_history_records(
+    db_manager: DatabaseManager = Depends(get_database_manager)
+) -> DeleteHistoryResponse:
+    """清空所有历史分析记录。"""
+    try:
+        service = HistoryService(db_manager)
+        deleted = service.delete_all_history()
+        return DeleteHistoryResponse(deleted=deleted)
+    except Exception as e:
+        logger.error(f"删除全部历史记录失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": f"删除全部历史记录失败: {str(e)}"
+            }
+        )
+
+
 @router.get(
     "/{record_id}",
     response_model=AnalysisReport,

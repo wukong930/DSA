@@ -12,11 +12,13 @@ import { normalizeReportLanguage, getReportText } from '../utils/reportLanguage'
 const HistoryPage: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [filterInput, setFilterInput] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const {
     error,
+    groups,
     selectedHistoryIds,
     isDeletingHistory,
     selectedReport,
@@ -24,6 +26,7 @@ const HistoryPage: React.FC = () => {
     markdownDrawerOpen,
     loadInitialHistory,
     deleteSelectedHistory,
+    deleteAllHistory,
     setFilterStockCode,
     openMarkdownDrawer,
     closeMarkdownDrawer,
@@ -31,6 +34,7 @@ const HistoryPage: React.FC = () => {
   } = useHistoryPageStore(
     useShallow((state) => ({
       error: state.error,
+      groups: state.groups,
       selectedHistoryIds: state.selectedHistoryIds,
       isDeletingHistory: state.isDeletingHistory,
       selectedReport: state.selectedReport,
@@ -38,6 +42,7 @@ const HistoryPage: React.FC = () => {
       markdownDrawerOpen: state.markdownDrawerOpen,
       loadInitialHistory: state.loadInitialHistory,
       deleteSelectedHistory: state.deleteSelectedHistory,
+      deleteAllHistory: state.deleteAllHistory,
       setFilterStockCode: state.setFilterStockCode,
       openMarkdownDrawer: state.openMarkdownDrawer,
       closeMarkdownDrawer: state.closeMarkdownDrawer,
@@ -65,6 +70,11 @@ const HistoryPage: React.FC = () => {
     void deleteSelectedHistory();
     setShowDeleteConfirm(false);
   }, [deleteSelectedHistory]);
+
+  const handleDeleteAll = useCallback(() => {
+    void deleteAllHistory();
+    setShowDeleteAllConfirm(false);
+  }, [deleteAllHistory]);
 
   const reportLanguage = normalizeReportLanguage(selectedReport?.meta.reportLanguage);
   const reportText = getReportText(reportLanguage);
@@ -94,6 +104,18 @@ const HistoryPage: React.FC = () => {
             disabled={isDeletingHistory}
           >
             删除
+          </Button>
+        </div>
+      )}
+      {selectedHistoryIds.length === 0 && groups.length > 0 && (
+        <div className="flex items-center justify-end px-3 py-2 border-t border-subtle-hover">
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => setShowDeleteAllConfirm(true)}
+            disabled={isDeletingHistory}
+          >
+            删除全部
           </Button>
         </div>
       )}
@@ -204,6 +226,17 @@ const HistoryPage: React.FC = () => {
         isDanger
         onConfirm={handleDeleteSelected}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showDeleteAllConfirm}
+        title="删除全部历史记录"
+        message="确认删除所有历史分析记录吗？此操作不可恢复。"
+        confirmText={isDeletingHistory ? '删除中...' : '确认删除全部'}
+        cancelText="取消"
+        isDanger
+        onConfirm={handleDeleteAll}
+        onCancel={() => setShowDeleteAllConfirm(false)}
       />
     </div>
   );

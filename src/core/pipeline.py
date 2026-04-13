@@ -63,14 +63,23 @@ class StockAnalysisPipeline:
         source_message: Optional[BotMessage] = None,
         query_id: Optional[str] = None,
         query_source: Optional[str] = None,
-        save_context_snapshot: Optional[bool] = None
+        save_context_snapshot: Optional[bool] = None,
+        # Shared heavy objects (Layer 1 singletons) — pass None to use module-level singletons
+        fetcher_manager: Optional[DataFetcherManager] = None,
+        analyzer: Optional[GeminiAnalyzer] = None,
+        search_service: Optional[SearchService] = None,
+        forecast_service: Optional[object] = None,  # ForecastService or None
     ):
         """
         初始化调度器
-        
+
         Args:
             config: 配置对象（可选，默认使用全局配置）
             max_workers: 最大并发线程数（可选，默认从配置读取）
+            fetcher_manager: 共享 DataFetcherManager（可选，默认使用单例）
+            analyzer: 共享 GeminiAnalyzer（可选，默认使用单例）
+            search_service: 共享 SearchService（可选，默认使用单例）
+            forecast_service: 共享 ForecastService（可选，默认使用单例）
         """
         self.config = config or get_config()
         self.max_workers = max_workers or self.config.max_workers
@@ -80,28 +89,34 @@ class StockAnalysisPipeline:
         self.save_context_snapshot = (
             self.config.save_context_snapshot if save_context_snapshot is None else save_context_snapshot
         )
-        
-        # 初始化各模块
+
+        # 初始化各模块 — 优先复用传入的共享实例，否则使用模块级单例
         self.db = get_db()
-        self.fetcher_manager = DataFetcherManager()
+
+        if fetcher_manager is not None:
+            self.fetcher_manager = fetcher_manager
+        else:
+            from data_provider.base import get_shared_fetcher_manager
+            self.fetcher_manager = get_shared_fetcher_manager()
+
         # 不再单独创建 akshare_fetcher，统一使用 fetcher_manager 获取增强数据
         self.trend_analyzer = StockTrendAnalyzer()  # 技术分析器
-        self.analyzer = GeminiAnalyzer(config=self.config)
+
+        if analyzer is not None:
+            self.analyzer = analyzer
+        else:
+            from src.analyzer import get_shared_analyzer
+            self.analyzer = get_shared_analyzer(config=self.config)
+
         self.notifier = NotificationService(source_message=source_message)
-        
+
         # 初始化搜索服务
-        self.search_service = SearchService(
-            bocha_keys=self.config.bocha_api_keys,
-            tavily_keys=self.config.tavily_api_keys,
-            brave_keys=self.config.brave_api_keys,
-            serpapi_keys=self.config.serpapi_keys,
-            minimax_keys=self.config.minimax_api_keys,
-            searxng_base_urls=self.config.searxng_base_urls,
-            searxng_public_instances_enabled=self.config.searxng_public_instances_enabled,
-            news_max_age_days=self.config.news_max_age_days,
-            news_strategy_profile=getattr(self.config, "news_strategy_profile", "short"),
-        )
-        
+        if search_service is not None:
+            self.search_service = search_service
+        else:
+            from src.search_service import get_search_service
+            self.search_service = get_search_service()
+
         logger.info(f"调度器初始化完成，最大并发数: {self.max_workers}")
         logger.info("已启用技术分析引擎（均线/趋势/量价指标）")
         # 打印实时行情/筹码配置状态
@@ -115,15 +130,18 @@ class StockAnalysisPipeline:
             logger.info("筹码分布分析已禁用")
 
         # 初始化时序预测服务（可选）
-        self.forecast_service = None
-        if self.config.enable_forecast:
+        if forecast_service is not None:
+            self.forecast_service = forecast_service
+        elif self.config.enable_forecast:
             try:
-                from src.services.forecast_service import ForecastService
-                self.forecast_service = ForecastService()
+                from src.services.forecast_service import get_forecast_service
+                self.forecast_service = get_forecast_service()
                 logger.info("TimesFM 时序预测已启用")
             except Exception as e:
+                self.forecast_service = None
                 logger.warning(f"TimesFM 初始化失败，预测功能已禁用: {e}")
         else:
+            self.forecast_service = None
             logger.info("TimesFM 时序预测已禁用")
 
         if self.search_service.is_available:
@@ -1689,3 +1707,66 @@ def run_analysis_pipeline(code: str, analysis_mode: str = "traditional") -> Opti
     pipeline = StockAnalysisPipeline(config=config)
     results = pipeline.run(stock_codes=[code], send_notification=False)
     return results[0] if results else None
+
+
+def run_batch_analysis_pipeline(
+    codes: list[str],
+    analysis_mode: str = "traditional",
+) -> list[str]:
+    """Batch entry point — one pipeline instance for all stocks.
+
+    Splits codes into batches (config.analysis_batch_size), runs GC between
+    batches, and logs memory usage.
+
+    Args:
+        codes: Stock codes to analyze.
+        analysis_mode: 'traditional' or 'agent'.
+
+    Returns:
+        List of stock codes that failed.
+    """
+    from src.utils.memory_utils import force_gc, log_memory
+
+    config = get_config()
+    if analysis_mode == "agent":
+        config.agent_mode = True
+        config._agent_mode_explicit = True
+    else:
+        config.agent_mode = False
+        config._agent_mode_explicit = True
+
+    batch_size = getattr(config, "analysis_batch_size", 20)
+    do_gc = getattr(config, "analysis_gc_between_batches", True)
+    do_mem_log = getattr(config, "analysis_memory_log_enabled", True)
+
+    pipeline = StockAnalysisPipeline(config=config)
+    failed_codes: list[str] = []
+
+    # Split into batches
+    batches = [codes[i:i + batch_size] for i in range(0, len(codes), batch_size)]
+    total_batches = len(batches)
+
+    for batch_idx, batch in enumerate(batches, 1):
+        if do_mem_log:
+            log_memory(f"batch {batch_idx}/{total_batches} start ({len(batch)} stocks)")
+
+        for code in batch:
+            try:
+                results = pipeline.run(stock_codes=[code], send_notification=False)
+                if not results:
+                    logger.warning("Batch pipeline: no result for %s", code)
+                    failed_codes.append(code)
+                else:
+                    logger.info("Batch pipeline: completed %s", code)
+            except Exception as e:
+                logger.warning("Batch pipeline: failed %s: %s", code, e)
+                failed_codes.append(code)
+
+        # GC between batches (not after the last one)
+        if do_gc and batch_idx < total_batches:
+            force_gc(f"after batch {batch_idx}/{total_batches}")
+
+    if do_mem_log:
+        log_memory("batch pipeline finished")
+
+    return failed_codes

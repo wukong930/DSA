@@ -379,6 +379,10 @@ class HistoryService:
         """
         return self.db.delete_analysis_history_records(record_ids)
 
+    def delete_all_history(self) -> int:
+        """Delete all analysis history records."""
+        return self.db.delete_all_analysis_history()
+
     def get_news_intel(self, query_id: str, limit: int = 20) -> List[Dict[str, str]]:
         """
         Get news intelligence associated with a specified query_id.

@@ -129,46 +129,89 @@ class SchedulerService:
 
     async def _run_daily_analysis(self, stock_codes: list, task: dict, analysis_mode: str = "traditional") -> list[str]:
         """Run analysis for a list of stocks with one retry for failures. Returns final failed codes."""
-        from src.core.pipeline import run_analysis_pipeline
         from src.config import get_config
         config = get_config()
         per_stock_timeout = getattr(config, "agent_orchestrator_timeout_s", 600) + 60
+        batch_timeout = per_stock_timeout * len(stock_codes)
+        use_subprocess = getattr(config, "analysis_subprocess_enabled", False)
 
-        failed_codes: list[str] = []
+        if use_subprocess:
+            from src.services.subprocess_runner import SubprocessAnalysisRunner
+            runner = SubprocessAnalysisRunner(
+                timeout_s=getattr(config, "analysis_subprocess_timeout_s", 1200),
+            )
+            batch_size = getattr(config, "analysis_batch_size", 20)
 
-        # First pass
-        for code in stock_codes:
+            # First pass
             try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(run_analysis_pipeline, code, analysis_mode=analysis_mode),
-                    timeout=per_stock_timeout,
+                failed_codes = await asyncio.to_thread(
+                    runner.run_batch, stock_codes, analysis_mode, batch_size,
                 )
-                logger.info("Scheduled analysis completed for %s (task %d, mode=%s)", code, task["id"], analysis_mode)
-            except asyncio.TimeoutError:
-                logger.warning("Scheduled analysis timed out for %s (task %d, limit=%ds)", code, task["id"], per_stock_timeout)
-                failed_codes.append(code)
+                for code in stock_codes:
+                    if code not in failed_codes:
+                        logger.info("Scheduled analysis completed for %s (task %d, mode=%s, subprocess)", code, task["id"], analysis_mode)
             except Exception as e:
-                logger.warning("Scheduled analysis failed for %s: %s", code, e)
-                failed_codes.append(code)
+                logger.warning("Subprocess batch failed for task %d: %s", task["id"], e)
+                failed_codes = list(stock_codes)
 
-        # Retry pass — one attempt for each failed stock
+            # Retry pass
+            if failed_codes:
+                logger.info("Retrying %d failed stock(s) for task %d (subprocess): %s", len(failed_codes), task["id"], failed_codes)
+                try:
+                    still_failed = await asyncio.to_thread(
+                        runner.run_batch, failed_codes, analysis_mode, batch_size,
+                    )
+                    for code in failed_codes:
+                        if code not in still_failed:
+                            logger.info("Retry succeeded for %s (task %d, subprocess)", code, task["id"])
+                        else:
+                            logger.warning("Retry failed for %s (task %d, subprocess), skipping until next cycle", code, task["id"])
+                    return still_failed
+                except Exception as e:
+                    logger.warning("Subprocess retry failed for task %d: %s", task["id"], e)
+                    return failed_codes
+
+            return []
+
+        # --- In-process path (Layer 2 + 3) ---
+        from src.core.pipeline import run_batch_analysis_pipeline
+
+        # First pass — single pipeline instance for all stocks
+        try:
+            failed_codes = await asyncio.wait_for(
+                asyncio.to_thread(run_batch_analysis_pipeline, stock_codes, analysis_mode),
+                timeout=batch_timeout,
+            )
+            for code in stock_codes:
+                if code not in failed_codes:
+                    logger.info("Scheduled analysis completed for %s (task %d, mode=%s)", code, task["id"], analysis_mode)
+        except asyncio.TimeoutError:
+            logger.warning("Batch analysis timed out for task %d (limit=%ds)", task["id"], batch_timeout)
+            failed_codes = list(stock_codes)
+        except Exception as e:
+            logger.warning("Batch analysis failed for task %d: %s", task["id"], e)
+            failed_codes = list(stock_codes)
+
+        # Retry pass — one attempt for each failed stock (reuses singletons via Layer 1)
         if failed_codes:
             logger.info("Retrying %d failed stock(s) for task %d: %s", len(failed_codes), task["id"], failed_codes)
-            still_failed: list[str] = []
-            for code in failed_codes:
-                try:
-                    await asyncio.wait_for(
-                        asyncio.to_thread(run_analysis_pipeline, code, analysis_mode=analysis_mode),
-                        timeout=per_stock_timeout,
-                    )
-                    logger.info("Retry succeeded for %s (task %d)", code, task["id"])
-                except asyncio.TimeoutError:
-                    logger.warning("Retry timed out for %s (task %d), skipping until next cycle", code, task["id"])
-                    still_failed.append(code)
-                except Exception as e:
-                    logger.warning("Retry failed for %s (task %d): %s, skipping until next cycle", code, task["id"], e)
-                    still_failed.append(code)
-            return still_failed
+            try:
+                still_failed = await asyncio.wait_for(
+                    asyncio.to_thread(run_batch_analysis_pipeline, failed_codes, analysis_mode),
+                    timeout=per_stock_timeout * len(failed_codes),
+                )
+                for code in failed_codes:
+                    if code not in still_failed:
+                        logger.info("Retry succeeded for %s (task %d)", code, task["id"])
+                    else:
+                        logger.warning("Retry failed for %s (task %d), skipping until next cycle", code, task["id"])
+                return still_failed
+            except asyncio.TimeoutError:
+                logger.warning("Retry batch timed out for task %d, skipping until next cycle", task["id"])
+                return failed_codes
+            except Exception as e:
+                logger.warning("Retry batch failed for task %d: %s, skipping until next cycle", task["id"], e)
+                return failed_codes
 
         return []
 

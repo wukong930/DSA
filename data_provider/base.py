@@ -2291,3 +2291,21 @@ class DataFetcherManager:
             return top, bottom
         logger.warning(f"[板块排行] 所有数据源均失败，最终错误: {last_error}")
         return [], []
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton
+# ---------------------------------------------------------------------------
+
+_fetcher_manager_instance: Optional[DataFetcherManager] = None
+_fetcher_manager_lock = RLock()
+
+
+def get_shared_fetcher_manager() -> DataFetcherManager:
+    """Thread-safe singleton accessor for DataFetcherManager."""
+    global _fetcher_manager_instance
+    if _fetcher_manager_instance is None:
+        with _fetcher_manager_lock:
+            if _fetcher_manager_instance is None:
+                _fetcher_manager_instance = DataFetcherManager()
+    return _fetcher_manager_instance

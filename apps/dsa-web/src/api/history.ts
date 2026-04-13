@@ -110,4 +110,12 @@ export const historyApi = {
 
     return toCamelCase<{ deleted: number }>(response.data);
   },
+
+  /**
+   * 删除全部历史记录
+   */
+  deleteAll: async (): Promise<{ deleted: number }> => {
+    const response = await apiClient.delete<Record<string, unknown>>('/api/v1/history/all');
+    return toCamelCase<{ deleted: number }>(response.data);
+  },
 };

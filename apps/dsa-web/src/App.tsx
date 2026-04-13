@@ -12,6 +12,7 @@ import MonitorPage from './pages/MonitorPage';
 import WatchlistPage from './pages/WatchlistPage';
 import SchedulePage from './pages/SchedulePage';
 import HistoryPage from './pages/HistoryPage';
+import StrategyBacktestPage from './pages/StrategyBacktestPage';
 import { ApiErrorAlert, Shell } from './components/common';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useAgentChatStore } from './stores/agentChatStore';
@@ -73,6 +74,7 @@ const AppContent: React.FC = () => {
         <Route path="/schedule" element={<SchedulePage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/backtest" element={<BacktestPage />} />
+        <Route path="/strategy-backtest" element={<StrategyBacktestPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

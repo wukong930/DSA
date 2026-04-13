@@ -38,11 +38,19 @@ from src.services.system_config_service import SystemConfigService
 async def app_lifespan(app: FastAPI):
     """Initialize and release shared services for the app lifecycle."""
     from src.services.scheduler_service import SchedulerService
+    from src.services.strategy_bt_service import StrategyBtService
 
     app.state.system_config_service = SystemConfigService()
     scheduler = SchedulerService()
     app.state.scheduler_service = scheduler
     await scheduler.start()
+
+    # Load persisted custom factors/strategies into in-memory registries
+    StrategyBtService.load_persisted_custom_data()
+
+    # Mark interrupted runs as failed
+    StrategyBtService.recover_stale_runs()
+
     try:
         yield
     finally:

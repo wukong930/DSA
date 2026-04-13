@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '../common';
 import type { HistoryGroupItem } from '../../types/analysis';
@@ -9,7 +10,11 @@ import { truncateStockName, isStockNameTruncated } from '../../utils/stockName';
 interface HistoryGroupHeaderProps {
   group: HistoryGroupItem;
   isExpanded: boolean;
+  isChecked: boolean;
+  isIndeterminate: boolean;
+  isDeleting?: boolean;
   onToggle: () => void;
+  onToggleSelection: () => void;
 }
 
 const getOperationBadgeLabel = (advice?: string) => {
@@ -25,8 +30,14 @@ const getOperationBadgeLabel = (advice?: string) => {
 export const HistoryGroupHeader: React.FC<HistoryGroupHeaderProps> = ({
   group,
   isExpanded,
+  isChecked,
+  isIndeterminate,
+  isDeleting = false,
   onToggle,
+  onToggleSelection,
 }) => {
+  const checkboxRef = useRef<HTMLInputElement>(null);
+  const checkboxId = useId();
   const sentimentColor =
     group.latestSentimentScore !== undefined
       ? getSentimentColor(group.latestSentimentScore)
@@ -34,12 +45,35 @@ export const HistoryGroupHeader: React.FC<HistoryGroupHeaderProps> = ({
   const stockName = group.stockName || group.stockCode;
   const isTruncated = isStockNameTruncated(stockName);
 
+  useEffect(() => {
+    if (checkboxRef.current) {
+      checkboxRef.current.indeterminate = isIndeterminate;
+    }
+  }, [isIndeterminate]);
+
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="w-full text-left p-2.5 rounded-lg hover:bg-subtle-hover/50 transition-colors duration-150 group/header"
-    >
+    <div className="flex items-center gap-1 group/header">
+      <label
+        className="flex-shrink-0 flex items-center justify-center w-7 h-7 cursor-pointer"
+        htmlFor={checkboxId}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          id={checkboxId}
+          ref={checkboxRef}
+          type="checkbox"
+          checked={isChecked}
+          onChange={(e) => { e.stopPropagation(); onToggleSelection(); }}
+          disabled={isDeleting}
+          aria-label={`选中 ${stockName} 全部记录`}
+          className="h-3.5 w-3.5 cursor-pointer bg-transparent accent-primary focus:ring-primary/30 disabled:opacity-50"
+        />
+      </label>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex-1 text-left p-2.5 rounded-lg hover:bg-subtle-hover/50 transition-colors duration-150"
+      >
       <div className="flex items-center gap-2">
         <span className="text-muted-text flex-shrink-0 w-4">
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -103,5 +137,6 @@ export const HistoryGroupHeader: React.FC<HistoryGroupHeaderProps> = ({
         </div>
       </div>
     </button>
+    </div>
   );
 };

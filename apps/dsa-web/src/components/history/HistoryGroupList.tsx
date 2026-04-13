@@ -19,6 +19,7 @@ export const HistoryGroupList: React.FC = () => {
     toggleGroup,
     selectHistoryItem,
     toggleHistorySelection,
+    toggleGroupSelection,
   } = useHistoryPageStore(
     useShallow((state) => ({
       groups: state.groups,
@@ -32,6 +33,7 @@ export const HistoryGroupList: React.FC = () => {
       toggleGroup: state.toggleGroup,
       selectHistoryItem: state.selectHistoryItem,
       toggleHistorySelection: state.toggleHistorySelection,
+      toggleGroupSelection: state.toggleGroupSelection,
     })),
   );
 
@@ -71,7 +73,18 @@ export const HistoryGroupList: React.FC = () => {
             <HistoryGroupHeader
               group={group}
               isExpanded={isExpanded}
+              isChecked={
+                !!subItems && subItems.length > 0 &&
+                subItems.every((item) => selectedHistoryIds.includes(item.id))
+              }
+              isIndeterminate={
+                !!subItems && subItems.length > 0 &&
+                subItems.some((item) => selectedHistoryIds.includes(item.id)) &&
+                !subItems.every((item) => selectedHistoryIds.includes(item.id))
+              }
+              isDeleting={isDeletingHistory}
               onToggle={() => toggleGroup(group.stockCode)}
+              onToggleSelection={() => toggleGroupSelection(group.stockCode)}
             />
 
             {isExpanded && (

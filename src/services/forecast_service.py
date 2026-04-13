@@ -9,6 +9,7 @@ Gated behind ENABLE_FORECAST config flag (default: False).
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from typing import Optional
 
@@ -50,11 +51,16 @@ class ForecastService:
 
     def __init__(self):
         self._model = None
+        self._model_lock = threading.Lock()
 
     def _ensure_model(self):
-        """Load model on first use."""
+        """Load model on first use (thread-safe)."""
         if self._model is not None:
             return
+
+        with self._model_lock:
+            if self._model is not None:
+                return
 
         try:
             import timesfm
@@ -256,3 +262,21 @@ class ForecastService:
             f"predicted={predicted}"
         )
         return result
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton
+# ---------------------------------------------------------------------------
+
+_forecast_instance: Optional[ForecastService] = None
+_forecast_lock = threading.Lock()
+
+
+def get_forecast_service() -> ForecastService:
+    """Thread-safe singleton accessor for ForecastService."""
+    global _forecast_instance
+    if _forecast_instance is None:
+        with _forecast_lock:
+            if _forecast_instance is None:
+                _forecast_instance = ForecastService()
+    return _forecast_instance
